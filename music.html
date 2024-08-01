@@ -32,8 +32,18 @@
         gainNode.connect(audioContext.destination);
         analyser.fftSize = 2048;
         analyser.connect(gainNode);
-        document.addEventListener('touchend', ()=>audioContext.resume());
         console.log("AudioContext initialized");
+
+        // Attempt to resume the AudioContext on different types of user interactions
+        ['click', 'touchstart'].forEach(eventType => {
+          document.addEventListener(eventType, () => {
+            if (audioContext.state === 'suspended') {
+              audioContext.resume().then(() => {
+                console.log('AudioContext resumed');
+              });
+            }
+          });
+        });
       }
     };
 
@@ -196,7 +206,6 @@
     });
 
     drawPiano();
-
   </script>
 </body>
 </html>
