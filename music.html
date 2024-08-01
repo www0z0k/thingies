@@ -32,6 +32,7 @@
         gainNode.connect(audioContext.destination);
         analyser.fftSize = 2048;
         analyser.connect(gainNode);
+        document.addEventListener('touchend', ()=>audioContext.resume());
         console.log("AudioContext initialized");
       }
     };
@@ -196,7 +197,6 @@
 
     drawPiano();
 
-    document.addEventListener('touchend', ()=>window.audioContext.resume());
   </script>
 </body>
 </html>
