@@ -20,12 +20,21 @@
   <canvas id="waveformCanvas" width="700" height="400"></canvas>
 
   <script>
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const analyser = audioContext.createAnalyser();
-    const gainNode = audioContext.createGain();
-    gainNode.connect(audioContext.destination);
-    analyser.fftSize = 2048;
-    const bufferLength = analyser.frequencyBinCount;
+    let audioContext = null;
+    let analyser = null;
+    let gainNode = null;
+
+    const initializeAudioContext = () => {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        gainNode = audioContext.createGain();
+        gainNode.connect(audioContext.destination);
+        analyser.fftSize = 2048;
+      }
+    };
+
+    const bufferLength = 1024;
     const dataArray = new Uint8Array(bufferLength);
     const frequencyDataArray = new Uint8Array(bufferLength);
 
@@ -38,8 +47,10 @@
     const drawVisualizations = () => {
       requestAnimationFrame(drawVisualizations);
 
-      analyser.getByteTimeDomainData(dataArray);
-      analyser.getByteFrequencyData(frequencyDataArray);
+      if (analyser) {
+        analyser.getByteTimeDomainData(dataArray);
+        analyser.getByteFrequencyData(frequencyDataArray);
+      }
 
       waveformCtx.fillStyle = 'rgb(200, 200, 200)';
       waveformCtx.fillRect(0, 0, waveformCanvas.width, waveformCanvas.height);
@@ -52,7 +63,7 @@
       let x = 0;
 
       for (let i = 0; i < bufferLength; i++) {
-        const v = dataArray[i] / 128;
+        const v = dataArray[i] / 128.0;
         const y = v * (waveformCanvas.height / 2) / 2;
 
         if (i === 0) {
@@ -121,6 +132,8 @@
     };
 
     const playSound = (frequency) => {
+      initializeAudioContext();
+
       const oscillator = audioContext.createOscillator();
       oscillator.type = 'sine';
       oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
@@ -131,9 +144,35 @@
     };
 
     pianoCanvas.addEventListener('mousedown', (e) => {
+      initializeAudioContext();
+
       const rect = pianoCanvas.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
+
+      // Check if a black key was clicked
+      for (let i = 0; i < blackKeyOffsets.length; i++) {
+        if (x > blackKeyOffsets[i] && x < blackKeyOffsets[i] + blackKeyWidth && y < blackKeyHeight) {
+          playSound(frequencies[blackKeys[i]]);
+          return;
+        }
+      }
+
+      // Check if a white key was clicked
+      for (let i = 0; i < whiteKeyOffsets.length; i++) {
+        if (x > whiteKeyOffsets[i] && x < whiteKeyOffsets[i] + whiteKeyWidth) {
+          playSound(frequencies[whiteKeys[i]]);
+          return;
+        }
+      }
+    });
+
+    pianoCanvas.addEventListener('touchstart', (e) => {
+      initializeAudioContext();
+
+      const rect = pianoCanvas.getBoundingClientRect();
+      const x = e.touches[0].clientX - rect.left;
+      const y = e.touches[0].clientY - rect.top;
 
       // Check if a black key was clicked
       for (let i = 0; i < blackKeyOffsets.length; i++) {
