@@ -31,6 +31,8 @@
         gainNode = audioContext.createGain();
         gainNode.connect(audioContext.destination);
         analyser.fftSize = 2048;
+        analyser.connect(gainNode);
+        console.log("AudioContext initialized");
       }
     };
 
@@ -141,6 +143,7 @@
       analyser.connect(gainNode);
       oscillator.start();
       oscillator.stop(audioContext.currentTime + 0.5);
+      console.log(`Playing sound at frequency: ${frequency}`);
     };
 
     pianoCanvas.addEventListener('mousedown', (e) => {
