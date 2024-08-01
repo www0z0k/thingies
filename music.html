@@ -3,12 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Piano and Drum Kit with Sequencer</title>
+  <title>Piano and Drum Kit with Sequencer and Mixer</title>
   <style>
     body {
       display: flex;
       flex-direction: column;
       align-items: center;
+      background-color: #121212;
+      color: #ffffff;
+      font-family: Arial, sans-serif;
     }
     #main {
       display: flex;
@@ -32,7 +35,8 @@
     .sequencer-cell {
       width: 30px;
       height: 30px;
-      border: 1px solid #ccc;
+      border: 1px solid #555;
+      background-color: #333;
       cursor: pointer;
     }
     .sequencer-cell.active {
@@ -52,6 +56,7 @@
     }
     canvas {
       margin-top: 10px;
+      background-color: #333;
     }
     .drum-label {
       display: flex;
@@ -61,10 +66,31 @@
     }
     .drum-label button {
       margin-right: 5px;
+      background-color: #444;
+      color: #fff;
+      border: 1px solid #555;
+      cursor: pointer;
+    }
+    .drum-label button:hover {
+      background-color: #555;
     }
     .sequencer-wrapper {
       display: flex;
       align-items: flex-start;
+    }
+    .mixer {
+      margin-top: 20px;
+    }
+    .mixer .track {
+      display: flex;
+      align-items: center;
+      margin-bottom: 5px;
+    }
+    .mixer .track label {
+      margin-right: 5px;
+    }
+    .mixer input[type="range"] {
+      width: 100px;
     }
   </style>
 </head>
@@ -91,6 +117,7 @@
           <label for="pitch">Pitch: </label>
           <input type="range" id="pitch" min="-12" max="12" value="0">
         </div>
+        <!--
         <div class="control">
           <label for="echo">Echo: </label>
           <input type="range" id="echo" min="0" max="1" step="0.01" value="0">
@@ -111,6 +138,7 @@
           <label for="chorus">Chorus: </label>
           <input type="range" id="chorus" min="0" max="1" step="0.01" value="0">
         </div>
+        -->
         <div class="control">
           <button id="startRecording">Start Recording</button>
           <button id="stopRecording" disabled>Stop Recording</button>
@@ -120,6 +148,36 @@
         <div class="control">
           <button id="startSequencer">Start Sequencer</button>
           <button id="stopSequencer" disabled>Stop Sequencer</button>
+        </div>
+      </div>
+      <div class="mixer">
+        <div class="track">
+          <label for="kickVolume">Kick Volume: </label>
+          <input type="range" id="kickVolume" min="0" max="1" step="0.01" value="0.5">
+        </div>
+        <div class="track">
+          <label for="snareVolume">Snare Volume: </label>
+          <input type="range" id="snareVolume" min="0" max="1" step="0.01" value="0.5">
+        </div>
+        <div class="track">
+          <label for="hihatVolume">Hi-Hat Volume: </label>
+          <input type="range" id="hihatVolume" min="0" max="1" step="0.01" value="0.5">
+        </div>
+        <div class="track">
+          <label for="tomVolume">Tom Volume: </label>
+          <input type="range" id="tomVolume" min="0" max="1" step="0.01" value="0.5">
+        </div>
+        <div class="track">
+          <label for="crashVolume">Crash Volume: </label>
+          <input type="range" id="crashVolume" min="0" max="1" step="0.01" value="0.5">
+        </div>
+        <div class="track">
+          <label for="rideVolume">Ride Volume: </label>
+          <input type="range" id="rideVolume" min="0" max="1" step="0.01" value="0.5">
+        </div>
+        <div class="track">
+          <label for="pianoVolume">Piano Volume: </label>
+          <input type="range" id="pianoVolume" min="0" max="1" step="0.01" value="0.5">
         </div>
       </div>
     </div>
@@ -132,12 +190,14 @@
   <script>
     let audioContext = null;
     let analyser = null;
-    let gainNode = null;
-    let delayNode = null;
-    let distortionNode = null;
-    let reverbNode = null;
-    let tremoloNode = null;
-    let chorusNode = null;
+    let masterGainNode = null;
+    let pianoGainNode = null;
+    let kickGainNode = null;
+    let snareGainNode = null;
+    let hihatGainNode = null;
+    let tomGainNode = null;
+    let crashGainNode = null;
+    let rideGainNode = null;
     let recorder = null;
     let recordedChunks = [];
     let recordedBuffer = null;
@@ -150,10 +210,26 @@
       if (!audioContext) {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         analyser = audioContext.createAnalyser();
-        gainNode = audioContext.createGain();
-        gainNode.connect(audioContext.destination);
+        masterGainNode = audioContext.createGain();
+        pianoGainNode = audioContext.createGain();
+        kickGainNode = audioContext.createGain();
+        snareGainNode = audioContext.createGain();
+        hihatGainNode = audioContext.createGain();
+        tomGainNode = audioContext.createGain();
+        crashGainNode = audioContext.createGain();
+        rideGainNode = audioContext.createGain();
+
+        masterGainNode.connect(audioContext.destination);
+        pianoGainNode.connect(masterGainNode);
+        kickGainNode.connect(masterGainNode);
+        snareGainNode.connect(masterGainNode);
+        hihatGainNode.connect(masterGainNode);
+        tomGainNode.connect(masterGainNode);
+        crashGainNode.connect(masterGainNode);
+        rideGainNode.connect(masterGainNode);
         analyser.fftSize = 2048;
-        analyser.connect(gainNode);
+        analyser.connect(masterGainNode);
+
         console.log("AudioContext initialized");
 
         // Attempt to resume the AudioContext on different types of user interactions
@@ -170,6 +246,29 @@
         // Initialize sequencer array
         drumSounds.forEach((drum, rowIndex) => {
           sequencer[rowIndex] = Array(sequencerSteps).fill(false);
+        });
+
+        // Update mixer volume controls
+        document.getElementById('kickVolume').addEventListener('input', (e) => {
+          kickGainNode.gain.value = e.target.value;
+        });
+        document.getElementById('snareVolume').addEventListener('input', (e) => {
+          snareGainNode.gain.value = e.target.value;
+        });
+        document.getElementById('hihatVolume').addEventListener('input', (e) => {
+          hihatGainNode.gain.value = e.target.value;
+        });
+        document.getElementById('tomVolume').addEventListener('input', (e) => {
+          tomGainNode.gain.value = e.target.value;
+        });
+        document.getElementById('crashVolume').addEventListener('input', (e) => {
+          crashGainNode.gain.value = e.target.value;
+        });
+        document.getElementById('rideVolume').addEventListener('input', (e) => {
+          rideGainNode.gain.value = e.target.value;
+        });
+        document.getElementById('pianoVolume').addEventListener('input', (e) => {
+          pianoGainNode.gain.value = e.target.value;
         });
       }
     };
@@ -199,8 +298,8 @@
       gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
 
       oscillator.connect(gain);
-      gain.connect(analyser);
-      analyser.connect(gainNode);
+      gain.connect(kickGainNode);
+      kickGainNode.connect(analyser);
       oscillator.start();
       oscillator.stop(audioContext.currentTime + 0.5);
     };
@@ -221,8 +320,8 @@
 
       noise.connect(noiseFilter);
       noiseFilter.connect(noiseGain);
-      noiseGain.connect(analyser);
-      analyser.connect(gainNode);
+      noiseGain.connect(snareGainNode);
+      snareGainNode.connect(analyser);
       noise.start();
       noise.stop(audioContext.currentTime + 0.2);
 
@@ -236,7 +335,7 @@
       gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.2);
 
       oscillator.connect(gain);
-      gain.connect(analyser);
+      gain.connect(snareGainNode);
       oscillator.start();
       oscillator.stop(audioContext.currentTime + 0.2);
     };
@@ -257,8 +356,8 @@
 
       noise.connect(noiseFilter);
       noiseFilter.connect(noiseGain);
-      noiseGain.connect(analyser);
-      analyser.connect(gainNode);
+      noiseGain.connect(hihatGainNode);
+      hihatGainNode.connect(analyser);
       noise.start();
       noise.stop(audioContext.currentTime + 0.1);
     };
@@ -276,8 +375,8 @@
       gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
 
       oscillator.connect(gain);
-      gain.connect(analyser);
-      analyser.connect(gainNode);
+      gain.connect(tomGainNode);
+      tomGainNode.connect(analyser);
       oscillator.start();
       oscillator.stop(audioContext.currentTime + 0.5);
     };
@@ -294,8 +393,8 @@
       noiseGain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 1);
 
       noise.connect(noiseGain);
-      noiseGain.connect(analyser);
-      analyser.connect(gainNode);
+      noiseGain.connect(crashGainNode);
+      crashGainNode.connect(analyser);
       noise.start();
       noise.stop(audioContext.currentTime + 1);
     };
@@ -312,8 +411,8 @@
       noiseGain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
 
       noise.connect(noiseGain);
-      noiseGain.connect(analyser);
-      analyser.connect(gainNode);
+      noiseGain.connect(rideGainNode);
+      rideGainNode.connect(analyser);
       noise.start();
       noise.stop(audioContext.currentTime + 0.5);
     };
@@ -336,12 +435,12 @@
         analyser.getByteFrequencyData(frequencyDataArray);
       }
 
-      waveformCtx.fillStyle = 'rgb(200, 200, 200)';
+      waveformCtx.fillStyle = 'rgb(50, 50, 50)';
       waveformCtx.fillRect(0, 0, waveformCanvas.width, waveformCanvas.height);
 
       // Draw waveform
       waveformCtx.lineWidth = 2;
-      waveformCtx.strokeStyle = 'rgb(0, 0, 0)';
+      waveformCtx.strokeStyle = 'rgb(255, 255, 255)';
       waveformCtx.beginPath();
       const sliceWidth = waveformCanvas.width * 1.0 / bufferLength;
       let x = 0;
@@ -415,56 +514,6 @@
       });
     };
 
-    const applyEffects = (oscillator) => {
-      let inputNode = oscillator;
-
-      if (parseFloat(document.getElementById('echo').value) > 0) {
-        if (!delayNode) {
-          delayNode = createDelayNode();
-          delayNode.connect(gainNode);
-        }
-        inputNode.connect(delayNode);
-      }
-
-      if (parseInt(document.getElementById('distortion').value) > 0) {
-        if (!distortionNode) {
-          distortionNode = createDistortionNode();
-          distortionNode.connect(gainNode);
-        }
-        inputNode.connect(distortionNode);
-      }
-
-      if (parseFloat(document.getElementById('reverb').value) > 0) {
-        if (!reverbNode) {
-          reverbNode = createReverbNode();
-          reverbNode.connect(gainNode);
-        }
-        inputNode.connect(reverbNode);
-      }
-
-      if (parseFloat(document.getElementById('tremolo').value) > 0) {
-        if (!tremoloNode) {
-          tremoloNode = createTremoloNode();
-          tremoloNode.connect(gainNode);
-        }
-        inputNode.connect(tremoloNode);
-      }
-
-      if (parseFloat(document.getElementById('chorus').value) > 0) {
-        if (!chorusNode) {
-          chorusNode = createChorusNode();
-          chorusNode.connect(gainNode);
-        }
-        inputNode.connect(chorusNode);
-      }
-
-      if (parseFloat(document.getElementById('echo').value) === 0 && parseInt(document.getElementById('distortion').value) === 0 &&
-          parseFloat(document.getElementById('reverb').value) === 0 && parseFloat(document.getElementById('tremolo').value) === 0 &&
-          parseFloat(document.getElementById('chorus').value) === 0) {
-        inputNode.connect(gainNode);
-      }
-    };
-
     const playSound = (frequency) => {
       initializeAudioContext();
 
@@ -472,11 +521,15 @@
       const adjustedFrequency = frequency * Math.pow(2, pitch / 12);
 
       const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+
       oscillator.type = 'sine';
       oscillator.frequency.setValueAtTime(adjustedFrequency, audioContext.currentTime);
-      oscillator.connect(analyser);
-      analyser.connect(gainNode);
-      applyEffects(oscillator);
+      gain.gain.value = pianoGainNode.gain.value; // Ensure the gain value is applied
+
+      oscillator.connect(gain);
+      gain.connect(pianoGainNode);
+      pianoGainNode.connect(analyser);
       oscillator.start();
       oscillator.stop(audioContext.currentTime + 0.5);
       console.log(`Playing sound at frequency: ${adjustedFrequency}`);
@@ -538,7 +591,7 @@
       recordedChunks = [];
 
       const mediaStream = audioContext.createMediaStreamDestination();
-      gainNode.connect(mediaStream);
+      masterGainNode.connect(mediaStream);
       recorder = new MediaRecorder(mediaStream.stream);
 
       recorder.ondataavailable = (e) => {
