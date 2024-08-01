@@ -195,6 +195,8 @@
     });
 
     drawPiano();
+
+    document.addEventListener('touchend', ()=>window.audioContext.resume());
   </script>
 </body>
 </html>
