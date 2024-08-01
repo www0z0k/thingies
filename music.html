@@ -3,26 +3,148 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>2-Octave Piano with Waveform and Bars Visualization</title>
+  <title>Piano and Drum Kit with Sequencer</title>
   <style>
     body {
       display: flex;
       flex-direction: column;
       align-items: center;
     }
+    #main {
+      display: flex;
+      align-items: flex-start;
+    }
+    #sequencer-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-right: 20px;
+    }
+    #sequencer {
+      display: grid;
+      grid-template-columns: repeat(16, 30px);
+      gap: 5px;
+      margin-left: 10px;
+    }
+    .sequencer-row {
+      display: contents;
+    }
+    .sequencer-cell {
+      width: 30px;
+      height: 30px;
+      border: 1px solid #ccc;
+      cursor: pointer;
+    }
+    .sequencer-cell.active {
+      background-color: #007bff;
+    }
+    .sequencer-cell.current {
+      border: 2px solid #ff0000;
+    }
+    #controls {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .control {
+      margin-bottom: 10px;
+    }
     canvas {
       margin-top: 10px;
+    }
+    .drum-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 5px;
+    }
+    .drum-label button {
+      margin-right: 5px;
+    }
+    .sequencer-wrapper {
+      display: flex;
+      align-items: flex-start;
     }
   </style>
 </head>
 <body>
-  <canvas id="pianoCanvas" width="700" height="150"></canvas>
-  <canvas id="waveformCanvas" width="700" height="400"></canvas>
+  <div id="main">
+    <div id="sequencer-container">
+      <div class="sequencer-wrapper">
+        <div id="sequencer-labels">
+          <div class="drum-label"><button class="drum" data-sound="kick">Kick</button></div>
+          <div class="drum-label"><button class="drum" data-sound="snare">Snare</button></div>
+          <div class="drum-label"><button class="drum" data-sound="hihat">Hi-Hat</button></div>
+          <div class="drum-label"><button class="drum" data-sound="tom">Tom</button></div>
+          <div class="drum-label"><button class="drum" data-sound="crash">Crash</button></div>
+          <div class="drum-label"><button class="drum" data-sound="ride">Ride</button></div>
+        </div>
+        <div id="sequencer"></div>
+      </div>
+      <div id="controls">
+        <div class="control">
+          <label for="bpm">BPM: </label>
+          <input type="number" id="bpm" min="60" max="200" value="120">
+        </div>
+        <div class="control">
+          <label for="pitch">Pitch: </label>
+          <input type="range" id="pitch" min="-12" max="12" value="0">
+        </div>
+        <div class="control">
+          <label for="echo">Echo: </label>
+          <input type="range" id="echo" min="0" max="1" step="0.01" value="0">
+        </div>
+        <div class="control">
+          <label for="distortion">Distortion: </label>
+          <input type="range" id="distortion" min="0" max="100" value="0">
+        </div>
+        <div class="control">
+          <label for="reverb">Reverb: </label>
+          <input type="range" id="reverb" min="0" max="1" step="0.01" value="0">
+        </div>
+        <div class="control">
+          <label for="tremolo">Tremolo: </label>
+          <input type="range" id="tremolo" min="0" max="1" step="0.01" value="0">
+        </div>
+        <div class="control">
+          <label for="chorus">Chorus: </label>
+          <input type="range" id="chorus" min="0" max="1" step="0.01" value="0">
+        </div>
+        <div class="control">
+          <button id="startRecording">Start Recording</button>
+          <button id="stopRecording" disabled>Stop Recording</button>
+          <button id="playRecording" disabled>Play Recording</button>
+          <button id="downloadRecording" disabled>Download Recording</button>
+        </div>
+        <div class="control">
+          <button id="startSequencer">Start Sequencer</button>
+          <button id="stopSequencer" disabled>Stop Sequencer</button>
+        </div>
+      </div>
+    </div>
+    <div>
+      <canvas id="pianoCanvas" width="700" height="150"></canvas>
+      <canvas id="waveformCanvas" width="700" height="400"></canvas>
+    </div>
+  </div>
 
   <script>
     let audioContext = null;
     let analyser = null;
     let gainNode = null;
+    let delayNode = null;
+    let distortionNode = null;
+    let reverbNode = null;
+    let tremoloNode = null;
+    let chorusNode = null;
+    let recorder = null;
+    let recordedChunks = [];
+    let recordedBuffer = null;
+    let sequencerInterval = null;
+    const sequencerSteps = 16;
+    const sequencer = [];
+    const drumSounds = ['kick', 'snare', 'hihat', 'tom', 'crash', 'ride'];
 
     const initializeAudioContext = () => {
       if (!audioContext) {
@@ -44,7 +166,156 @@
             }
           });
         });
+
+        // Initialize sequencer array
+        drumSounds.forEach((drum, rowIndex) => {
+          sequencer[rowIndex] = Array(sequencerSteps).fill(false);
+        });
       }
+    };
+
+    const generateNoiseBuffer = () => {
+      const bufferSize = audioContext.sampleRate;
+      const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+      const output = buffer.getChannelData(0);
+
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = Math.random() * 2 - 1;
+      }
+
+      return buffer;
+    };
+
+    const playKick = () => {
+      initializeAudioContext();
+
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
+      gain.gain.setValueAtTime(1, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
+
+      oscillator.connect(gain);
+      gain.connect(analyser);
+      analyser.connect(gainNode);
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.5);
+    };
+
+    const playSnare = () => {
+      initializeAudioContext();
+
+      const noiseBuffer = generateNoiseBuffer();
+      const noise = audioContext.createBufferSource();
+      const noiseFilter = audioContext.createBiquadFilter();
+      const noiseGain = audioContext.createGain();
+
+      noise.buffer = noiseBuffer;
+      noiseFilter.type = 'highpass';
+      noiseFilter.frequency.value = 1000;
+      noiseGain.gain.setValueAtTime(1, audioContext.currentTime);
+      noiseGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+
+      noise.connect(noiseFilter);
+      noiseFilter.connect(noiseGain);
+      noiseGain.connect(analyser);
+      analyser.connect(gainNode);
+      noise.start();
+      noise.stop(audioContext.currentTime + 0.2);
+
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+
+      oscillator.type = 'triangle';
+      oscillator.frequency.setValueAtTime(100, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.2);
+      gain.gain.setValueAtTime(0.7, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.2);
+
+      oscillator.connect(gain);
+      gain.connect(analyser);
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.2);
+    };
+
+    const playHiHat = () => {
+      initializeAudioContext();
+
+      const noiseBuffer = generateNoiseBuffer();
+      const noise = audioContext.createBufferSource();
+      const noiseFilter = audioContext.createBiquadFilter();
+      const noiseGain = audioContext.createGain();
+
+      noise.buffer = noiseBuffer;
+      noiseFilter.type = 'highpass';
+      noiseFilter.frequency.value = 5000;
+      noiseGain.gain.setValueAtTime(0.5, audioContext.currentTime);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
+
+      noise.connect(noiseFilter);
+      noiseFilter.connect(noiseGain);
+      noiseGain.connect(analyser);
+      analyser.connect(gainNode);
+      noise.start();
+      noise.stop(audioContext.currentTime + 0.1);
+    };
+
+    const playTom = () => {
+      initializeAudioContext();
+
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
+      gain.gain.setValueAtTime(1, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
+
+      oscillator.connect(gain);
+      gain.connect(analyser);
+      analyser.connect(gainNode);
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.5);
+    };
+
+    const playCrash = () => {
+      initializeAudioContext();
+
+      const noiseBuffer = generateNoiseBuffer();
+      const noise = audioContext.createBufferSource();
+      const noiseGain = audioContext.createGain();
+
+      noise.buffer = noiseBuffer;
+      noiseGain.gain.setValueAtTime(1, audioContext.currentTime);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 1);
+
+      noise.connect(noiseGain);
+      noiseGain.connect(analyser);
+      analyser.connect(gainNode);
+      noise.start();
+      noise.stop(audioContext.currentTime + 1);
+    };
+
+    const playRide = () => {
+      initializeAudioContext();
+
+      const noiseBuffer = generateNoiseBuffer();
+      const noise = audioContext.createBufferSource();
+      const noiseGain = audioContext.createGain();
+
+      noise.buffer = noiseBuffer;
+      noiseGain.gain.setValueAtTime(0.5, audioContext.currentTime);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
+
+      noise.connect(noiseGain);
+      noiseGain.connect(analyser);
+      analyser.connect(gainNode);
+      noise.start();
+      noise.stop(audioContext.currentTime + 0.5);
     };
 
     const bufferLength = 1024;
@@ -144,17 +415,71 @@
       });
     };
 
+    const applyEffects = (oscillator) => {
+      let inputNode = oscillator;
+
+      if (parseFloat(document.getElementById('echo').value) > 0) {
+        if (!delayNode) {
+          delayNode = createDelayNode();
+          delayNode.connect(gainNode);
+        }
+        inputNode.connect(delayNode);
+      }
+
+      if (parseInt(document.getElementById('distortion').value) > 0) {
+        if (!distortionNode) {
+          distortionNode = createDistortionNode();
+          distortionNode.connect(gainNode);
+        }
+        inputNode.connect(distortionNode);
+      }
+
+      if (parseFloat(document.getElementById('reverb').value) > 0) {
+        if (!reverbNode) {
+          reverbNode = createReverbNode();
+          reverbNode.connect(gainNode);
+        }
+        inputNode.connect(reverbNode);
+      }
+
+      if (parseFloat(document.getElementById('tremolo').value) > 0) {
+        if (!tremoloNode) {
+          tremoloNode = createTremoloNode();
+          tremoloNode.connect(gainNode);
+        }
+        inputNode.connect(tremoloNode);
+      }
+
+      if (parseFloat(document.getElementById('chorus').value) > 0) {
+        if (!chorusNode) {
+          chorusNode = createChorusNode();
+          chorusNode.connect(gainNode);
+        }
+        inputNode.connect(chorusNode);
+      }
+
+      if (parseFloat(document.getElementById('echo').value) === 0 && parseInt(document.getElementById('distortion').value) === 0 &&
+          parseFloat(document.getElementById('reverb').value) === 0 && parseFloat(document.getElementById('tremolo').value) === 0 &&
+          parseFloat(document.getElementById('chorus').value) === 0) {
+        inputNode.connect(gainNode);
+      }
+    };
+
     const playSound = (frequency) => {
       initializeAudioContext();
 
+      const pitch = parseInt(document.getElementById('pitch').value);
+      const adjustedFrequency = frequency * Math.pow(2, pitch / 12);
+
       const oscillator = audioContext.createOscillator();
       oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+      oscillator.frequency.setValueAtTime(adjustedFrequency, audioContext.currentTime);
       oscillator.connect(analyser);
       analyser.connect(gainNode);
+      applyEffects(oscillator);
       oscillator.start();
       oscillator.stop(audioContext.currentTime + 0.5);
-      console.log(`Playing sound at frequency: ${frequency}`);
+      console.log(`Playing sound at frequency: ${adjustedFrequency}`);
     };
 
     pianoCanvas.addEventListener('mousedown', (e) => {
@@ -206,6 +531,193 @@
     });
 
     drawPiano();
+
+    // Recording functionality
+    document.getElementById('startRecording').addEventListener('click', () => {
+      initializeAudioContext();
+      recordedChunks = [];
+
+      const mediaStream = audioContext.createMediaStreamDestination();
+      gainNode.connect(mediaStream);
+      recorder = new MediaRecorder(mediaStream.stream);
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          recordedChunks.push(e.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(recordedChunks, { type: 'audio/wav' });
+        const reader = new FileReader();
+        reader.readAsArrayBuffer(blob);
+        reader.onloadend = () => {
+          audioContext.decodeAudioData(reader.result, (buffer) => {
+            recordedBuffer = buffer;
+            document.getElementById('playRecording').disabled = false;
+            document.getElementById('downloadRecording').disabled = false;
+          });
+        };
+      };
+
+      recorder.start();
+      document.getElementById('startRecording').disabled = true;
+      document.getElementById('stopRecording').disabled = false;
+      console.log('Recording started');
+    });
+
+    document.getElementById('stopRecording').addEventListener('click', () => {
+      recorder.stop();
+      document.getElementById('startRecording').disabled = false;
+      document.getElementById('stopRecording').disabled = true;
+      console.log('Recording stopped');
+    });
+
+    document.getElementById('playRecording').addEventListener('click', () => {
+      if (recordedBuffer) {
+        const playbackSource = audioContext.createBufferSource();
+        playbackSource.buffer = recordedBuffer;
+        playbackSource.connect(audioContext.destination);
+        playbackSource.start();
+        console.log('Playing recording');
+      }
+    });
+
+    document.getElementById('downloadRecording').addEventListener('click', () => {
+      if (recordedChunks.length > 0) {
+        const blob = new Blob(recordedChunks, { type: 'audio/wav' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = 'recording.wav';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        console.log('Recording downloaded');
+      }
+    });
+
+    // Drum kit functionality
+    document.querySelectorAll('.drum').forEach(button => {
+      button.addEventListener('click', (e) => {
+        const sound = e.target.dataset.sound;
+        switch (sound) {
+          case 'kick':
+            playKick();
+            break;
+          case 'snare':
+            playSnare();
+            break;
+          case 'hihat':
+            playHiHat();
+            break;
+          case 'tom':
+            playTom();
+            break;
+          case 'crash':
+            playCrash();
+            break;
+          case 'ride':
+            playRide();
+            break;
+        }
+      });
+    });
+
+    // Sequencer functionality
+    const createSequencerGrid = () => {
+      const sequencerContainer = document.getElementById('sequencer');
+      sequencerContainer.innerHTML = '';
+
+      drumSounds.forEach((drum, rowIndex) => {
+        for (let step = 0; step < sequencerSteps; step++) {
+          const cell = document.createElement('div');
+          cell.className = 'sequencer-cell';
+          cell.dataset.row = rowIndex;
+          cell.dataset.step = step;
+          cell.addEventListener('click', toggleCell);
+          sequencerContainer.appendChild(cell);
+        }
+      });
+    };
+
+    const toggleCell = (e) => {
+      const cell = e.target;
+      const row = parseInt(cell.dataset.row);
+      const step = parseInt(cell.dataset.step);
+
+      sequencer[row][step] = !sequencer[row][step];
+      cell.classList.toggle('active', sequencer[row][step]);
+    };
+
+    const playSequencer = () => {
+      let currentStep = 0;
+      const interval = (60 / parseInt(document.getElementById('bpm').value)) * 1000 / 4; // Interval in milliseconds
+
+      sequencerInterval = setInterval(() => {
+        if (!audioContext) {
+          initializeAudioContext();
+        }
+        drumSounds.forEach((drum, rowIndex) => {
+          if (sequencer[rowIndex][currentStep]) {
+            switch (drum) {
+              case 'kick':
+                playKick();
+                break;
+              case 'snare':
+                playSnare();
+                break;
+              case 'hihat':
+                playHiHat();
+                break;
+              case 'tom':
+                playTom();
+                break;
+              case 'crash':
+                playCrash();
+                break;
+              case 'ride':
+                playRide();
+                break;
+            }
+          }
+        });
+
+        // Highlight the current step
+        const cells = document.querySelectorAll('.sequencer-cell');
+        cells.forEach(cell => {
+          const step = parseInt(cell.dataset.step);
+          cell.classList.toggle('current', step === currentStep);
+        });
+
+        currentStep = (currentStep + 1) % sequencerSteps;
+      }, interval);
+    };
+
+    const stopSequencer = () => {
+      clearInterval(sequencerInterval);
+
+      // Remove current step highlight
+      const cells = document.querySelectorAll('.sequencer-cell');
+      cells.forEach(cell => {
+        cell.classList.remove('current');
+      });
+    };
+
+    document.getElementById('startSequencer').addEventListener('click', () => {
+      playSequencer();
+      document.getElementById('startSequencer').disabled = true;
+      document.getElementById('stopSequencer').disabled = false;
+    });
+
+    document.getElementById('stopSequencer').addEventListener('click', () => {
+      stopSequencer();
+      document.getElementById('startSequencer').disabled = false;
+      document.getElementById('stopSequencer').disabled = true;
+    });
+
+    createSequencerGrid();
   </script>
 </body>
 </html>
