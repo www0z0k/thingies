@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2-Octave Piano with Waveform and Bars Visualization</title>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    canvas {
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="pianoCanvas" width="700" height="150"></canvas>
+  <canvas id="waveformCanvas" width="700" height="400"></canvas>
+
+  <script>
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const analyser = audioContext.createAnalyser();
+    const gainNode = audioContext.createGain();
+    gainNode.connect(audioContext.destination);
+    analyser.fftSize = 2048;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    const frequencyDataArray = new Uint8Array(bufferLength);
+
+    const waveformCanvas = document.getElementById('waveformCanvas');
+    const waveformCtx = waveformCanvas.getContext('2d');
+
+    const pianoCanvas = document.getElementById('pianoCanvas');
+    const pianoCtx = pianoCanvas.getContext('2d');
+
+    const drawVisualizations = () => {
+      requestAnimationFrame(drawVisualizations);
+
+      analyser.getByteTimeDomainData(dataArray);
+      analyser.getByteFrequencyData(frequencyDataArray);
+
+      waveformCtx.fillStyle = 'rgb(200, 200, 200)';
+      waveformCtx.fillRect(0, 0, waveformCanvas.width, waveformCanvas.height);
+
+      // Draw waveform
+      waveformCtx.lineWidth = 2;
+      waveformCtx.strokeStyle = 'rgb(0, 0, 0)';
+      waveformCtx.beginPath();
+      const sliceWidth = waveformCanvas.width * 1.0 / bufferLength;
+      let x = 0;
+
+      for (let i = 0; i < bufferLength; i++) {
+        const v = dataArray[i] / 128;
+        const y = v * (waveformCanvas.height / 2) / 2;
+
+        if (i === 0) {
+          waveformCtx.moveTo(x, y);
+        } else {
+          waveformCtx.lineTo(x, y);
+        }
+
+        x += sliceWidth;
+      }
+
+      waveformCtx.lineTo(waveformCanvas.width, waveformCanvas.height / 4);
+      waveformCtx.stroke();
+
+      // Draw bars
+      const barWidth = (waveformCanvas.width / bufferLength) * 2.5;
+      let barHeight;
+      x = 0;
+
+      for (let i = 0; i < bufferLength; i++) {
+        barHeight = frequencyDataArray[i];
+        waveformCtx.fillStyle = 'rgb(' + (barHeight + 100) + ',50,50)';
+        waveformCtx.fillRect(x, waveformCanvas.height / 2 + (waveformCanvas.height / 4 - barHeight / 2), barWidth, barHeight / 2);
+
+        x += barWidth + 1;
+      }
+    };
+
+    drawVisualizations();
+
+    const frequencies = {
+      'C1': 130.81, 'C#1': 138.59, 'D1': 146.83, 'D#1': 155.56, 'E1': 164.81,
+      'F1': 174.61, 'F#1': 185.00, 'G1': 196.00, 'G#1': 207.65, 'A1': 220.00,
+      'A#1': 233.08, 'B1': 246.94,
+      'C': 261.63, 'C#': 277.18, 'D': 293.66, 'D#': 311.13, 'E': 329.63,
+      'F': 349.23, 'F#': 369.99, 'G': 392.00, 'G#': 415.30, 'A': 440.00,
+      'A#': 466.16, 'B': 493.88, 'C2': 523.25
+    };
+
+    const whiteKeys = ['C1', 'D1', 'E1', 'F1', 'G1', 'A1', 'B1', 'C', 'D', 'E', 'F', 'G', 'A', 'B', 'C2'];
+    const blackKeys = ['C#1', 'D#1', 'F#1', 'G#1', 'A#1', 'C#', 'D#', 'F#', 'G#', 'A#'];
+
+    const whiteKeyWidth = 40;
+    const whiteKeyHeight = 150;
+    const blackKeyWidth = 30;
+    const blackKeyHeight = 100;
+    const whiteKeyOffsets = whiteKeys.map((_, i) => i * (whiteKeyWidth + 1));
+    const blackKeyOffsets = [1, 2, 4, 5, 6, 8, 9, 11, 12, 13].map(i => i * (whiteKeyWidth + 1) - blackKeyWidth / 2);
+
+    const drawPiano = () => {
+      pianoCtx.clearRect(0, 0, pianoCanvas.width, pianoCanvas.height);
+
+      // Draw white keys
+      whiteKeyOffsets.forEach((offset, i) => {
+        pianoCtx.fillStyle = 'white';
+        pianoCtx.fillRect(offset, 0, whiteKeyWidth, whiteKeyHeight);
+        pianoCtx.strokeRect(offset, 0, whiteKeyWidth, whiteKeyHeight);
+      });
+
+      // Draw black keys
+      blackKeyOffsets.forEach((offset, i) => {
+        pianoCtx.fillStyle = 'black';
+        pianoCtx.fillRect(offset, 0, blackKeyWidth, blackKeyHeight);
+        pianoCtx.strokeRect(offset, 0, blackKeyWidth, blackKeyHeight);
+      });
+    };
+
+    const playSound = (frequency) => {
+      const oscillator = audioContext.createOscillator();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+      oscillator.connect(analyser);
+      analyser.connect(gainNode);
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.5);
+    };
+
+    pianoCanvas.addEventListener('mousedown', (e) => {
+      const rect = pianoCanvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      // Check if a black key was clicked
+      for (let i = 0; i < blackKeyOffsets.length; i++) {
+        if (x > blackKeyOffsets[i] && x < blackKeyOffsets[i] + blackKeyWidth && y < blackKeyHeight) {
+          playSound(frequencies[blackKeys[i]]);
+          return;
+        }
+      }
+
+      // Check if a white key was clicked
+      for (let i = 0; i < whiteKeyOffsets.length; i++) {
+        if (x > whiteKeyOffsets[i] && x < whiteKeyOffsets[i] + whiteKeyWidth) {
+          playSound(frequencies[whiteKeys[i]]);
+          return;
+        }
+      }
+    });
+
+    drawPiano();
+  </script>
+</body>
+</html>

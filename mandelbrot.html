@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mandelbrot Fractal</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #000;
+        }
+        canvas {
+            border: 1px solid #fff;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="mandelbrotCanvas" width="800" height="800"></canvas>
+    <script>
+        const canvas = document.getElementById('mandelbrotCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const width = canvas.width;
+        const height = canvas.height;
+
+        const maxIterations = 100;
+        const zoom = 200;
+        const panX = 2.5;
+        const panY = 2.5;
+
+        const mandelbrot = (cx, cy) => {
+            let x = 0;
+            let y = 0;
+            let iteration = 0;
+
+            while (x * x + y * y <= 4 && iteration < maxIterations) {
+                let xTemp = x * x - y * y + cx;
+                y = 2 * x * y + cy;
+                x = xTemp;
+                iteration++;
+            }
+
+            return iteration;
+        };
+
+        const drawMandelbrot = () => {
+            for (let x = 0; x < width; x++) {
+                for (let y = 0; y < height; y++) {
+                    const cx = (x - width / panX) / zoom;
+                    const cy = (y - height / panY) / zoom;
+                    const iterations = mandelbrot(cx, cy);
+
+                    const color = iterations === maxIterations ? 0 : (iterations * 16) % 255;
+                    ctx.fillStyle = `rgb(${color}, ${color}, ${color})`;
+                    ctx.fillRect(x, y, 1, 1);
+                }
+            }
+        };
+
+        drawMandelbrot();
+    </script>
+</body>
+</html>
