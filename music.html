@@ -206,6 +206,16 @@
     const sequencer = [];
     const drumSounds = ['kick', 'snare', 'hihat', 'tom', 'crash', 'ride'];
 
+    // const keyMapping = {
+    //     // white keys
+    //     'a': 'C1', 'w': 'C#1', 's': 'D1', 'e': 'D#1', 'd': 'E1', 'f': 'F1', 't': 'F#1',
+    //     'g': 'G1', 'y': 'G#1', 'h': 'A1', 'u': 'A#1', 'j': 'B1',
+    //     'k': 'C', 'o': 'C#', 'l': 'D', 
+    //     // black keys
+    //     'p': 'D#', ';': 'E', "'": 'F', ']': 'F#',
+    //     'z': 'G', 'x': 'G#', 'c': 'A', 'v': 'A#', 'b': 'B', 'n': 'C2'
+    // };
+
     const initializeAudioContext = () => {
       if (!audioContext) {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -270,6 +280,13 @@
         document.getElementById('pianoVolume').addEventListener('input', (e) => {
           pianoGainNode.gain.value = e.target.value;
         });
+
+        // Add keyboard event listener for piano
+        // document.addEventListener('keydown', (e) => {
+        //   if (keyMapping[e.key]) {
+        //     playSound(frequencies[keyMapping[e.key]]);
+        //   }
+        // });
       }
     };
 
@@ -504,6 +521,11 @@
         pianoCtx.fillStyle = 'white';
         pianoCtx.fillRect(offset, 0, whiteKeyWidth, whiteKeyHeight);
         pianoCtx.strokeRect(offset, 0, whiteKeyWidth, whiteKeyHeight);
+        pianoCtx.fillStyle = 'black';
+        pianoCtx.font = '10px Arial';
+        // const [k, v] = Object.entries(keyMapping)[i];
+        // pianoCtx.fillText(`${k}(${v})`, offset + 2, whiteKeyHeight - 15);
+        pianoCtx.fillText(whiteKeys[i], offset + 2, whiteKeyHeight - 15);
       });
 
       // Draw black keys
@@ -511,6 +533,10 @@
         pianoCtx.fillStyle = 'black';
         pianoCtx.fillRect(offset, 0, blackKeyWidth, blackKeyHeight);
         pianoCtx.strokeRect(offset, 0, blackKeyWidth, blackKeyHeight);
+        pianoCtx.fillStyle = 'white';
+        pianoCtx.font = '10px Arial';
+        // pianoCtx.fillText(Object.keys(keyMapping)[i + whiteKeys.length], offset + blackKeyWidth / 4, blackKeyHeight - 10);
+        pianoCtx.fillText(blackKeys[i], offset + blackKeyWidth / 4, blackKeyHeight - 10);
       });
     };
 
