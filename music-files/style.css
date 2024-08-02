@@ -1,0 +1,106 @@
+body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: #121212;
+    color: #ffffff;
+    font-family: Arial, sans-serif;
+  }
+  
+  #main {
+    display: flex;
+    align-items: flex-start;
+  }
+  
+  #sequencer-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-right: 20px;
+  }
+  
+  #sequencer {
+    display: grid;
+    grid-template-columns: repeat(16, 30px);
+    gap: 5px;
+    margin-left: 10px;
+  }
+  
+  .sequencer-row {
+    display: contents;
+  }
+  
+  .sequencer-cell {
+    width: 30px;
+    height: 30px;
+    border: 1px solid #555;
+    background-color: #333;
+    cursor: pointer;
+  }
+  
+  .sequencer-cell.active {
+    background-color: #007bff;
+  }
+  
+  .sequencer-cell.current {
+    border: 2px solid #ff0000;
+  }
+  
+  #controls {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .control {
+    margin-bottom: 10px;
+  }
+  
+  canvas {
+    margin-top: 10px;
+    background-color: #333;
+  }
+  
+  .drum-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 5px;
+  }
+  
+  .drum-label button {
+    margin-right: 5px;
+    background-color: #444;
+    color: #fff;
+    border: 1px solid #555;
+    cursor: pointer;
+  }
+  
+  .drum-label button:hover {
+    background-color: #555;
+  }
+  
+  .sequencer-wrapper {
+    display: flex;
+    align-items: flex-start;
+  }
+  
+  .mixer {
+    margin-top: 20px;
+  }
+  
+  .mixer .track {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+  }
+  
+  .mixer .track label {
+    margin-right: 5px;
+  }
+  
+  .mixer input[type="range"] {
+    width: 100px;
+  }
+  
