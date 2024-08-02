@@ -17,6 +17,7 @@ const sequencer = [];
 const drumSounds = ['kick', 'snare', 'hihat', 'tom', 'crash', 'ride'];
 const currentlyPressedKeys = new Set();
 const activeOscillators = new Map();
+let pianoPlayedByMouse = false;
 
 const keyMapping = {
     'z': 'C1',  's': 'C#1', 'x': 'D1',  'd': 'D#1', 'c': 'E1',  'v': 'F1',  'g': 'F#1', 
@@ -321,6 +322,7 @@ const startOscillator = (key) => {
     oscillator.connect(analyser);
     oscillator.start();
     activeOscillators.set(key, { oscillator, gain });
+    markKeyAsPressed(key);
   }
 };
 
@@ -330,7 +332,32 @@ const stopOscillator = (key) => {
     oscillatorObj.gain.gain.setValueAtTime(0, audioContext.currentTime + 0.1);
     oscillatorObj.oscillator.stop(audioContext.currentTime + 0.1);
     activeOscillators.delete(key);
+    unmarkKeyAsPressed(key);
   }
+};
+
+const markKeyAsPressed = (key) => {
+  const mapped = keyMapping[key];
+  let mappedIndex = whiteKeys.indexOf(mapped);
+  const isBlackKey = mappedIndex === -1;
+    if (isBlackKey) {
+        mappedIndex = blackKeys.indexOf(mapped);
+    }
+    // console.log(key, mapped, mappedIndex, isBlackKey);
+    
+    
+    if (mappedIndex > -1) {
+      const startX = isBlackKey ? blackKeyOffsets[mappedIndex] : whiteKeyOffsets[mappedIndex];
+      const keyWidth = isBlackKey ? blackKeyWidth : whiteKeyWidth;
+      pianoCtx.fillStyle = 'red';
+      pianoCtx.beginPath();
+      pianoCtx.arc(startX + keyWidth / 2, 10, 5, 0, Math.PI * 2);
+      pianoCtx.fill();
+    }
+};
+
+const unmarkKeyAsPressed = (key) => {
+  drawPiano(); // Redraw the piano to clear all markings
 };
 
 document.addEventListener('keydown', (event) => {
@@ -368,6 +395,7 @@ const drawPiano = () => {
     pianoCtx.font = '10px Arial';
     const correspondingKey = Object.keys(keyMapping).find(key => keyMapping[key] === whiteKeys[i]);
     pianoCtx.fillText(whiteKeys[i] + `(${correspondingKey})`, offset + 2, whiteKeyHeight - 15);
+    pianoCtx.rect(offset, 0, whiteKeyWidth, whiteKeyHeight);
   });
 
   blackKeyOffsets.forEach((offset, i) => {
@@ -378,11 +406,14 @@ const drawPiano = () => {
     pianoCtx.font = '10px Arial';
     const correspondingKey = Object.keys(keyMapping).find(key => keyMapping[key] === blackKeys[i]);
     pianoCtx.fillText(blackKeys[i] + `(${correspondingKey})`, offset + 2, blackKeyHeight - 10);
+    pianoCtx.rect(offset, 0, blackKeyWidth, blackKeyHeight);
   });
 };
 
-pianoCanvas.addEventListener('mousedown', (e) => {
+const handlePianoMouseDown = (e) => {
   initializeAudioContext();
+
+  pianoPlayedByMouse = true;
 
   const rect = pianoCanvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
@@ -390,39 +421,37 @@ pianoCanvas.addEventListener('mousedown', (e) => {
 
   for (let i = 0; i < blackKeyOffsets.length; i++) {
     if (x > blackKeyOffsets[i] && x < blackKeyOffsets[i] + blackKeyWidth && y < blackKeyHeight) {
-      playSound(frequencies[blackKeys[i]]);
+      startOscillator(Object.keys(keyMapping).find(key => keyMapping[key] === blackKeys[i]));
       return;
     }
   }
 
   for (let i = 0; i < whiteKeyOffsets.length; i++) {
     if (x > whiteKeyOffsets[i] && x < whiteKeyOffsets[i] + whiteKeyWidth) {
-      playSound(frequencies[whiteKeys[i]]);
+      startOscillator(Object.keys(keyMapping).find(key => keyMapping[key] === whiteKeys[i]));
       return;
     }
   }
-});
+};
 
+const handlePianoMouseUp = (e) => {
+  if (pianoPlayedByMouse) {
+    pianoPlayedByMouse = false;
+    currentlyPressedKeys.clear();
+    activeOscillators.forEach((_, key) => stopOscillator(key));
+  }
+};
+
+pianoCanvas.addEventListener('mousedown', handlePianoMouseDown);
+pianoCanvas.addEventListener('mouseup', handlePianoMouseUp);
+document.addEventListener('mouseup', handlePianoMouseUp);
 pianoCanvas.addEventListener('touchstart', (e) => {
-  initializeAudioContext();
-
-  const rect = pianoCanvas.getBoundingClientRect();
-  const x = e.touches[0].clientX - rect.left;
-  const y = e.touches[0].clientY - rect.top;
-
-  for (let i = 0; i < blackKeyOffsets.length; i++) {
-    if (x > blackKeyOffsets[i] && x < blackKeyOffsets[i] + blackKeyWidth && y < blackKeyHeight) {
-      playSound(frequencies[blackKeys[i]]);
-      return;
-    }
-  }
-
-  for (let i = 0; i < whiteKeyOffsets.length; i++) {
-    if (x > whiteKeyOffsets[i] && x < whiteKeyOffsets[i] + whiteKeyWidth) {
-      playSound(frequencies[whiteKeys[i]]);
-      return;
-    }
-  }
+  handlePianoMouseDown(e.touches[0]);
+  e.preventDefault();
+});
+pianoCanvas.addEventListener('touchend', (e) => {
+  handlePianoMouseUp(e.changedTouches[0]);
+  e.preventDefault();
 });
 
 drawPiano();
