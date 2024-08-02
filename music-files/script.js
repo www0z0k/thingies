@@ -16,8 +16,7 @@ const sequencerSteps = 16;
 const sequencer = [];
 const drumSounds = ['kick', 'snare', 'hihat', 'tom', 'crash', 'ride'];
 const currentlyPressedKeys = new Set();
-const frequenciesToPlay = new Set();
-let playTimeout;
+const activeOscillators = new Map();
 
 const keyMapping = {
     'z': 'C1',  's': 'C#1', 'x': 'D1',  'd': 'D#1', 'c': 'E1',  'v': 'F1',  'g': 'F#1', 
@@ -301,58 +300,50 @@ const drawVisualizations = () => {
 
 drawVisualizations();
 
-const mergeFrequencies = (frequencies) => {
-  const sampleRate = audioContext.sampleRate;
-  const duration = 1; // duration in seconds
-  const frameCount = sampleRate * duration;
-  const buffer = audioContext.createBuffer(1, frameCount, sampleRate);
-  const data = buffer.getChannelData(0);
+const createOscillator = (frequency) => {
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  oscillator.type = 'sine';
+  oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+  gain.gain.value = pianoGainNode.gain.value;
 
-  frequencies.forEach(frequency => {
-    for (let i = 0; i < frameCount; i++) {
-      data[i] += Math.sin(2 * Math.PI * frequency * i / sampleRate);
-    }
-  });
-
-  for (let i = 0; i < frameCount; i++) {
-    data[i] /= frequencies.length; // average the values
-  }
-
-  return buffer;
+  oscillator.connect(gain);
+  gain.connect(pianoGainNode);
+  return { oscillator, gain };
 };
 
-const playSound = () => {
+const startOscillator = (key) => {
   initializeAudioContext();
 
-  if (frequenciesToPlay.size === 0) return;
+  const frequency = frequencies[keyMapping[key]];
+  if (frequency && !activeOscillators.has(key)) {
+    const { oscillator, gain } = createOscillator(frequency);
+    oscillator.connect(analyser);
+    oscillator.start();
+    activeOscillators.set(key, { oscillator, gain });
+  }
+};
 
-  const buffer = mergeFrequencies(Array.from(frequenciesToPlay));
-  const source = audioContext.createBufferSource();
-  source.buffer = buffer;
-  const gainNode = audioContext.createGain();
-  source.connect(gainNode);
-  gainNode.connect(pianoGainNode);
-  pianoGainNode.connect(analyser);
-  gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
-  source.start();
-  source.stop(audioContext.currentTime + 1);
+const stopOscillator = (key) => {
+  const oscillatorObj = activeOscillators.get(key);
+  if (oscillatorObj) {
+    oscillatorObj.gain.gain.setValueAtTime(0, audioContext.currentTime + 0.1);
+    oscillatorObj.oscillator.stop(audioContext.currentTime + 0.1);
+    activeOscillators.delete(key);
+  }
 };
 
 document.addEventListener('keydown', (event) => {
   if (!currentlyPressedKeys.has(event.key) && keyMapping[event.key]) {
     currentlyPressedKeys.add(event.key);
-    frequenciesToPlay.add(frequencies[keyMapping[event.key]]);
-    clearTimeout(playTimeout);
-    playTimeout = setTimeout(playSound, 0);
+    startOscillator(event.key);
   }
 });
 
 document.addEventListener('keyup', (event) => {
   if (currentlyPressedKeys.has(event.key) && keyMapping[event.key]) {
     currentlyPressedKeys.delete(event.key);
-    frequenciesToPlay.delete(frequencies[keyMapping[event.key]]);
-    clearTimeout(playTimeout);
-    playTimeout = setTimeout(playSound, 0);
+    stopOscillator(event.key);
   }
 });
 
