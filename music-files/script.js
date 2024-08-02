@@ -15,14 +15,25 @@ let sequencerInterval = null;
 const sequencerSteps = 16;
 const sequencer = [];
 const drumSounds = ['kick', 'snare', 'hihat', 'tom', 'crash', 'ride'];
+const currentlyPressedKeys = new Set();
+const frequenciesToPlay = new Set();
+let playTimeout;
 
 const keyMapping = {
     'z': 'C1',  's': 'C#1', 'x': 'D1',  'd': 'D#1', 'c': 'E1',  'v': 'F1',  'g': 'F#1', 
     'b': 'G1',  'h': 'G#1', 'n': 'A1',  'j': 'A#1', 'm': 'B1', 
     'q': 'C',   '2': 'C#',  'w': 'D',   '3': 'D#',  'e': 'E',   'r': 'F',   '5': 'F#', 
     't': 'G',   '6': 'G#',  'y': 'A',   '7': 'A#',  'u': 'B',   'i': 'C2'
-  };
-  
+};
+
+const frequencies = {
+  'C1': 130.81, 'C#1': 138.59, 'D1': 146.83, 'D#1': 155.56, 'E1': 164.81,
+  'F1': 174.61, 'F#1': 185.00, 'G1': 196.00, 'G#1': 207.65, 'A1': 220.00,
+  'A#1': 233.08, 'B1': 246.94,
+  'C': 261.63, 'C#': 277.18, 'D': 293.66, 'D#': 311.13, 'E': 329.63,
+  'F': 349.23, 'F#': 369.99, 'G': 392.00, 'G#': 415.30, 'A': 440.00,
+  'A#': 466.16, 'B': 493.88, 'C2': 523.25
+};
 
 const initializeAudioContext = () => {
   if (!audioContext) {
@@ -84,12 +95,6 @@ const initializeAudioContext = () => {
     });
     document.getElementById('pianoVolume').addEventListener('input', (e) => {
       pianoGainNode.gain.value = e.target.value;
-    });
-
-    document.addEventListener('keydown', (e) => {
-      if (keyMapping[e.key]) {
-        playSound(frequencies[keyMapping[e.key]]);
-      }
     });
   }
 };
@@ -296,14 +301,60 @@ const drawVisualizations = () => {
 
 drawVisualizations();
 
-const frequencies = {
-  'C1': 130.81, 'C#1': 138.59, 'D1': 146.83, 'D#1': 155.56, 'E1': 164.81,
-  'F1': 174.61, 'F#1': 185.00, 'G1': 196.00, 'G#1': 207.65, 'A1': 220.00,
-  'A#1': 233.08, 'B1': 246.94,
-  'C': 261.63, 'C#': 277.18, 'D': 293.66, 'D#': 311.13, 'E': 329.63,
-  'F': 349.23, 'F#': 369.99, 'G': 392.00, 'G#': 415.30, 'A': 440.00,
-  'A#': 466.16, 'B': 493.88, 'C2': 523.25
+const mergeFrequencies = (frequencies) => {
+  const sampleRate = audioContext.sampleRate;
+  const duration = 1; // duration in seconds
+  const frameCount = sampleRate * duration;
+  const buffer = audioContext.createBuffer(1, frameCount, sampleRate);
+  const data = buffer.getChannelData(0);
+
+  frequencies.forEach(frequency => {
+    for (let i = 0; i < frameCount; i++) {
+      data[i] += Math.sin(2 * Math.PI * frequency * i / sampleRate);
+    }
+  });
+
+  for (let i = 0; i < frameCount; i++) {
+    data[i] /= frequencies.length; // average the values
+  }
+
+  return buffer;
 };
+
+const playSound = () => {
+  initializeAudioContext();
+
+  if (frequenciesToPlay.size === 0) return;
+
+  const buffer = mergeFrequencies(Array.from(frequenciesToPlay));
+  const source = audioContext.createBufferSource();
+  source.buffer = buffer;
+  const gainNode = audioContext.createGain();
+  source.connect(gainNode);
+  gainNode.connect(pianoGainNode);
+  pianoGainNode.connect(analyser);
+  gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+  source.start();
+  source.stop(audioContext.currentTime + 1);
+};
+
+document.addEventListener('keydown', (event) => {
+  if (!currentlyPressedKeys.has(event.key) && keyMapping[event.key]) {
+    currentlyPressedKeys.add(event.key);
+    frequenciesToPlay.add(frequencies[keyMapping[event.key]]);
+    clearTimeout(playTimeout);
+    playTimeout = setTimeout(playSound, 0);
+  }
+});
+
+document.addEventListener('keyup', (event) => {
+  if (currentlyPressedKeys.has(event.key) && keyMapping[event.key]) {
+    currentlyPressedKeys.delete(event.key);
+    frequenciesToPlay.delete(frequencies[keyMapping[event.key]]);
+    clearTimeout(playTimeout);
+    playTimeout = setTimeout(playSound, 0);
+  }
+});
 
 const whiteKeys = ['C1', 'D1', 'E1', 'F1', 'G1', 'A1', 'B1', 'C', 'D', 'E', 'F', 'G', 'A', 'B', 'C2'];
 const blackKeys = ['C#1', 'D#1', 'F#1', 'G#1', 'A#1', 'C#', 'D#', 'F#', 'G#', 'A#'];
@@ -337,27 +388,6 @@ const drawPiano = () => {
     const correspondingKey = Object.keys(keyMapping).find(key => keyMapping[key] === blackKeys[i]);
     pianoCtx.fillText(blackKeys[i] + `(${correspondingKey})`, offset + 2, blackKeyHeight - 10);
   });
-};
-
-const playSound = (frequency) => {
-  initializeAudioContext();
-
-  const pitch = parseInt(document.getElementById('pitch').value);
-  const adjustedFrequency = frequency * Math.pow(2, pitch / 12);
-
-  const oscillator = audioContext.createOscillator();
-  const gain = audioContext.createGain();
-
-  oscillator.type = 'sine';
-  oscillator.frequency.setValueAtTime(adjustedFrequency, audioContext.currentTime);
-  gain.gain.value = pianoGainNode.gain.value;
-
-  oscillator.connect(gain);
-  gain.connect(pianoGainNode);
-  pianoGainNode.connect(analyser);
-  oscillator.start();
-  oscillator.stop(audioContext.currentTime + 0.5);
-  console.log(`Playing sound at frequency: ${adjustedFrequency}`);
 };
 
 pianoCanvas.addEventListener('mousedown', (e) => {
