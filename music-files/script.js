@@ -18,6 +18,14 @@ const drumSounds = ['kick', 'snare', 'hihat', 'tom', 'crash', 'ride'];
 const currentlyPressedKeys = new Set();
 const activeOscillators = new Map();
 let pianoPlayedByMouse = false;
+let loops = [];
+let loopRecorder = null;
+let currentLoop = null;
+let isPlaying = false;
+let isPaused = false;
+let cropStartX = 0;
+let cropEndX = 200;
+let isCropping = false;
 
 const keyMapping = {
     'z': 'C1',  's': 'C#1', 'x': 'D1',  'd': 'D#1', 'c': 'E1',  'v': 'F1',  'g': 'F#1', 
@@ -293,7 +301,7 @@ const drawVisualizations = () => {
   for (let i = 0; i < bufferLength; i++) {
     barHeight = frequencyDataArray[i];
     waveformCtx.fillStyle = 'rgb(' + (barHeight + 100) + ',50,50)';
-    waveformCtx.fillRect(x, waveformCanvas.height / 2 + (waveformCanvas.height / 4 - barHeight / 2), barWidth, barHeight / 2);
+    waveformCtx.fillRect(x, waveformCanvas.height * 0.75 + (waveformCanvas.height / 4 - barHeight / 2), barWidth, barHeight / 2);
 
     x += barWidth + 1;
   }
@@ -340,20 +348,18 @@ const markKeyAsPressed = (key) => {
   const mapped = keyMapping[key];
   let mappedIndex = whiteKeys.indexOf(mapped);
   const isBlackKey = mappedIndex === -1;
-    if (isBlackKey) {
-        mappedIndex = blackKeys.indexOf(mapped);
-    }
-    // console.log(key, mapped, mappedIndex, isBlackKey);
-    
-    
-    if (mappedIndex > -1) {
-      const startX = isBlackKey ? blackKeyOffsets[mappedIndex] : whiteKeyOffsets[mappedIndex];
-      const keyWidth = isBlackKey ? blackKeyWidth : whiteKeyWidth;
-      pianoCtx.fillStyle = 'red';
-      pianoCtx.beginPath();
-      pianoCtx.arc(startX + keyWidth / 2, 10, 5, 0, Math.PI * 2);
-      pianoCtx.fill();
-    }
+  if (isBlackKey) {
+    mappedIndex = blackKeys.indexOf(mapped);
+  }
+
+  if (mappedIndex > -1) {
+    const startX = isBlackKey ? blackKeyOffsets[mappedIndex] : whiteKeyOffsets[mappedIndex];
+    const keyWidth = isBlackKey ? blackKeyWidth : whiteKeyWidth;
+    pianoCtx.fillStyle = 'red';
+    pianoCtx.beginPath();
+    pianoCtx.arc(startX + keyWidth / 2, 10, 5, 0, Math.PI * 2);
+    pianoCtx.fill();
+  }
 };
 
 const unmarkKeyAsPressed = (key) => {
@@ -456,71 +462,283 @@ pianoCanvas.addEventListener('touchend', (e) => {
 
 drawPiano();
 
-document.getElementById('startRecording').addEventListener('click', () => {
+document.getElementById('newLoop').addEventListener('click', () => {
+  if (loopRecorder && loopRecorder.state === "recording") {
+    loopRecorder.stop();
+    document.getElementById('newLoop').textContent = 'New Loop';
+  } else {
+    startLoopRecording();
+  }
+});
+
+document.getElementById('globalPlay').addEventListener('click', playAllLoops);
+document.getElementById('globalStop').addEventListener('click', stopAllLoops);
+
+function startLoopRecording() {
   initializeAudioContext();
   recordedChunks = [];
-
+  
   const mediaStream = audioContext.createMediaStreamDestination();
-  masterGainNode.connect(mediaStream);
-  recorder = new MediaRecorder(mediaStream.stream);
+  pianoGainNode.connect(mediaStream);  // Only record piano output
+  loopRecorder = new MediaRecorder(mediaStream.stream);
 
-  recorder.ondataavailable = (e) => {
+  loopRecorder.ondataavailable = (e) => {
     if (e.data.size > 0) {
       recordedChunks.push(e.data);
     }
   };
 
-  recorder.onstop = () => {
+  loopRecorder.onstop = () => {
     const blob = new Blob(recordedChunks, { type: 'audio/wav' });
     const reader = new FileReader();
     reader.readAsArrayBuffer(blob);
     reader.onloadend = () => {
       audioContext.decodeAudioData(reader.result, (buffer) => {
-        recordedBuffer = buffer;
-        document.getElementById('playRecording').disabled = false;
-        document.getElementById('downloadRecording').disabled = false;
+        createLoop(buffer);
       });
     };
   };
 
-  recorder.start();
-  document.getElementById('startRecording').disabled = true;
-  document.getElementById('stopRecording').disabled = false;
-  console.log('Recording started');
-});
+  loopRecorder.start();
+  document.getElementById('newLoop').textContent = 'Stop Rec';
+}
 
-document.getElementById('stopRecording').addEventListener('click', () => {
-  recorder.stop();
-  document.getElementById('startRecording').disabled = false;
-  document.getElementById('stopRecording').disabled = true;
-  console.log('Recording stopped');
-});
+function createLoop(buffer) {
+  const loop = {
+    buffer,
+    source: null,
+    gainNode: audioContext.createGain(),
+    isPlaying: false,
+    startTime: 0,
+    offset: 0,
+    playbackRate: 1,
+    pitch: 0,
+    positionMarker: null,
+    cropStart: 0,
+    cropEnd: buffer.duration,
+  };
 
-document.getElementById('playRecording').addEventListener('click', () => {
-  if (recordedBuffer) {
-    const playbackSource = audioContext.createBufferSource();
-    playbackSource.buffer = recordedBuffer;
-    playbackSource.connect(audioContext.destination);
-    playbackSource.start();
-    console.log('Playing recording');
+  loop.gainNode.connect(masterGainNode);
+
+  const loopElement = document.createElement('div');
+  loopElement.className = 'loop';
+
+  const waveform = document.createElement('canvas');
+  waveform.className = 'waveform';
+  waveform.width = 200;
+  waveform.height = 50;
+  waveform.dataset.loopIndex = loops.length;
+
+  const cropLeft = document.createElement('div');
+  cropLeft.className = 'crop';
+  cropLeft.style.left = '0';
+  cropLeft.dataset.crop = 'left';
+
+  const cropRight = document.createElement('div');
+  cropRight.className = 'crop';
+  cropRight.style.right = '0';
+  cropRight.dataset.crop = 'right';
+
+  waveform.appendChild(cropLeft);
+  waveform.appendChild(cropRight);
+
+  const positionMarker = document.createElement('div');
+  positionMarker.className = 'position-marker';
+  waveform.appendChild(positionMarker);
+  loop.positionMarker = positionMarker;
+
+  const controls = document.createElement('div');
+  controls.className = 'controls';
+  controls.innerHTML = `
+    <button class="play">Play</button>
+    <button class="stop" disabled>Stop</button>
+    <button class="delete">Delete</button>
+    <label>Volume: <input type="range" class="volume" min="0" max="1" step="0.01" value="1"></label>
+    <label>Speed: <input type="range" class="speed" min="0.5" max="2" step="0.1" value="1"></label>
+    <label>Pitch: <input type="range" class="pitch" min="-12" max="12" step="1" value="0"></label>
+  `;
+
+  loopElement.appendChild(waveform);
+  loopElement.appendChild(controls);
+
+  document.getElementById('loopsContainer').appendChild(loopElement);
+
+  loopElement.querySelector('.play').addEventListener('click', () => playLoop(loop));
+  loopElement.querySelector('.stop').addEventListener('click', () => stopLoop(loop));
+  loopElement.querySelector('.delete').addEventListener('click', () => deleteLoop(loop, loopElement));
+  loopElement.querySelector('.volume').addEventListener('input', (e) => {
+    loop.gainNode.gain.value = e.target.value;
+  });
+  loopElement.querySelector('.speed').addEventListener('input', (e) => {
+    loop.playbackRate = e.target.value;
+    if (loop.isPlaying) {
+      loop.source.playbackRate.value = loop.playbackRate;
+    }
+  });
+  loopElement.querySelector('.pitch').addEventListener('input', (e) => {
+    loop.pitch = e.target.value;
+    updateLoopPitch(loop);
+  });
+
+  loops.push(loop);
+
+  // Draggable crop handlers
+  cropLeft.addEventListener('mousedown', (e) => startCropDrag(e, loop, 'left'));
+  cropRight.addEventListener('mousedown', (e) => startCropDrag(e, loop, 'right'));
+
+  // Draw waveform
+  drawLoopWaveform(waveform, buffer);
+}
+
+function playLoop(loop) {
+  if (!loop.isPlaying) {
+    loop.source = audioContext.createBufferSource();
+    loop.source.buffer = loop.buffer;
+    loop.source.loop = true;
+    loop.source.connect(loop.gainNode);
+    loop.source.playbackRate.value = loop.playbackRate;
+
+    updateLoopPitch(loop);
+
+    loop.source.start(0, loop.cropStart);
+
+    loop.isPlaying = true;
+    loop.startTime = audioContext.currentTime;
+
+    const loopElement = document.querySelector(`[data-loop-index="${loops.indexOf(loop)}"]`).parentElement;
+    loopElement.querySelector('.play').disabled = true;
+    loopElement.querySelector('.stop').disabled = false;
+
+    // Start position marker movement
+    movePositionMarker(loop);
   }
-});
+}
 
-document.getElementById('downloadRecording').addEventListener('click', () => {
-  if (recordedChunks.length > 0) {
-    const blob = new Blob(recordedChunks, { type: 'audio/wav' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.style.display = 'none';
-    a.href = url;
-    a.download = 'recording.wav';
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    console.log('Recording downloaded');
+function stopLoop(loop) {
+  if (loop.isPlaying) {
+    loop.source.stop();
+    loop.offset = (audioContext.currentTime - loop.startTime) % loop.buffer.duration;
+    loop.isPlaying = false;
+
+    const loopElement = document.querySelector(`[data-loop-index="${loops.indexOf(loop)}"]`).parentElement;
+    loopElement.querySelector('.play').disabled = false;
+    loopElement.querySelector('.stop').disabled = true;
+
+    // Stop position marker movement
+    loop.positionMarker.style.left = '0px';
   }
-});
+}
 
+function deleteLoop(loop, loopElement) {
+  stopLoop(loop);
+  document.getElementById('loopsContainer').removeChild(loopElement);
+  loops.splice(loops.indexOf(loop), 1);
+}
+
+function playAllLoops() {
+  if (!isPlaying) {
+    loops.forEach(loop => playLoop(loop));
+    isPlaying = true;
+    document.getElementById('globalPlay').disabled = true;
+    document.getElementById('globalStop').disabled = false;
+  } else {
+    loops.forEach(loop => {
+      if (loop.isPlaying) {
+        stopLoop(loop);
+      }
+    });
+    isPlaying = false;
+    document.getElementById('globalPlay').disabled = false;
+    document.getElementById('globalStop').disabled = true;
+  }
+}
+
+function stopAllLoops() {
+  loops.forEach(loop => stopLoop(loop));
+  isPlaying = false;
+  document.getElementById('globalPlay').disabled = false;
+  document.getElementById('globalStop').disabled = true;
+}
+
+function startCropDrag(e, loop, cropSide) {
+  e.preventDefault();
+
+  const waveform = e.target.parentElement;
+  const loopIndex = waveform.dataset.loopIndex;
+  const loopElement = document.querySelector(`[data-loop-index="${loopIndex}"]`).parentElement;
+  let startX = e.clientX;
+  isCropping = true;
+
+  const mouseMoveHandler = (e) => {
+    if (!isCropping) return;
+    const deltaX = e.clientX - startX;
+
+    if (cropSide === 'left') {
+      cropStartX = Math.max(0, cropStartX + deltaX);
+      loop.cropStart = (cropStartX / waveform.clientWidth) * loop.buffer.duration;
+      e.target.style.left = `${(loop.cropStart / loop.buffer.duration) * 100}%`;
+    } else {
+      cropEndX = Math.min(waveform.clientWidth, cropEndX - deltaX);
+      loop.cropEnd = (cropEndX / waveform.clientWidth) * loop.buffer.duration;
+      e.target.style.right = `${100 - (loop.cropEnd / loop.buffer.duration) * 100}%`;
+    }
+
+    startX = e.clientX;
+  };
+
+  const mouseUpHandler = () => {
+    isCropping = false;
+    document.removeEventListener('mousemove', mouseMoveHandler);
+    document.removeEventListener('mouseup', mouseUpHandler);
+  };
+
+  document.addEventListener('mousemove', mouseMoveHandler);
+  document.addEventListener('mouseup', mouseUpHandler);
+}
+
+function drawLoopWaveform(canvas, buffer) {
+  const ctx = canvas.getContext('2d');
+  const data = buffer.getChannelData(0);
+  const step = Math.ceil(data.length / canvas.width);
+  const amp = canvas.height / 2;
+
+  ctx.fillStyle = 'rgb(50, 50, 50)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.strokeStyle = 'rgb(255, 255, 255)';
+  ctx.beginPath();
+  for (let i = 0; i < canvas.width; i++) {
+    const min = Math.min(...data.slice(i * step, (i + 1) * step));
+    const max = Math.max(...data.slice(i * step, (i + 1) * step));
+    ctx.moveTo(i, (1 + min) * amp);
+    ctx.lineTo(i, (1 + max) * amp);
+  }
+  ctx.stroke();
+}
+
+function movePositionMarker(loop) {
+  const marker = loop.positionMarker;
+  const duration = loop.buffer.duration;
+  const stepTime = 100; // Update every 100ms
+
+  const updateMarkerPosition = () => {
+    if (loop.isPlaying) {
+      const elapsed = (audioContext.currentTime - loop.startTime) % duration;
+      const position = (elapsed / duration) * 100;
+      marker.style.left = `${position}%`;
+      setTimeout(updateMarkerPosition, stepTime);
+    }
+  };
+
+  updateMarkerPosition();
+}
+
+function updateLoopPitch(loop) {
+  const playbackRate = Math.pow(2, loop.pitch / 12);
+  loop.source.playbackRate.value = playbackRate;
+}
+
+// Sequencer functionality
 document.querySelectorAll('.drum').forEach(button => {
   button.addEventListener('click', (e) => {
     const sound = e.target.dataset.sound;
