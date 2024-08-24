@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solitaire</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            background-color: #2c3e50;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="solitaireCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('solitaireCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const cardWidth = 81;
+        const cardHeight = 117;
+        const suits = ['hearts', 'diamonds', 'clubs', 'spades', 'back'];
+        const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+
+        const cardSprites = new Image();
+        cardSprites.src = 'path-to-your-new-spritesheet.png'; // Replace with the correct path to your new image
+
+        let tableau = [];
+        let foundations = [[], [], [], []];
+        let stock = [];
+        let waste = [];
+
+        let draggingCards = null; // Now we drag a list of cards
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+
+        const marginTop = 150;
+        const marginLeft = 50;
+        const foundationStartX = marginLeft + 2 * (cardWidth + 20);
+
+        const tableauStartY = marginTop + cardHeight + 20;
+
+        cardSprites.onload = () => {
+            initializeGame();
+            render();
+            addEventListeners();
+        };
+
+        function initializeGame() {
+            let deck = createDeck();
+            deck = shuffleDeck(deck);
+
+            for (let i = 0; i < 7; i++) {
+                tableau[i] = [];
+                for (let j = 0; j <= i; j++) {
+                    const card = deck.pop();
+                    card.faceUp = j === i;
+                    tableau[i].push(card);
+                }
+            }
+
+            stock = deck;
+        }
+
+        function createDeck() {
+            let deck = [];
+            for (let suit of suits) {
+                if (suit === 'back') continue;
+                for (let rank of ranks) {
+                    deck.push({ suit, rank, faceUp: false });
+                }
+            }
+            return deck;
+        }
+
+        function shuffleDeck(deck) {
+            for (let i = deck.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [deck[i], deck[j]] = [deck[j], deck[i]];
+            }
+            return deck;
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Render Foundations
+            for (let i = 0; i < foundations.length; i++) {
+                const x = foundationStartX + i * (cardWidth + 20);
+                if (foundations[i].length > 0) {
+                    renderCard(foundations[i][foundations[i].length - 1], x, marginTop);
+                } else {
+                    ctx.strokeStyle = 'white';
+                    ctx.strokeRect(x, marginTop, cardWidth, cardHeight);
+                }
+            }
+
+            // Render Stock
+            if (stock.length > 0) {
+                renderCardBack(marginLeft, marginTop);
+            } else if (waste.length > 0) {
+                // Render a placeholder to allow resetting the deck
+                ctx.strokeStyle = 'white';
+                ctx.strokeRect(marginLeft, marginTop, cardWidth, cardHeight);
+            }
+
+            // Render Waste
+            if (waste.length > 0) {
+                renderCard(waste[waste.length - 1], marginLeft + cardWidth + 20, marginTop);
+            }
+
+            // Render Tableau
+            for (let i = 0; i < tableau.length; i++) {
+                for (let j = 0; j < tableau[i].length; j++) {
+                    const card = tableau[i][j];
+                    const x = marginLeft + i * (cardWidth + 20);
+                    const y = tableauStartY + j * 30;
+                    renderCard(card, x, y);
+                }
+
+                // Draw empty slot for tableau
+                if (tableau[i].length === 0) {
+                    ctx.strokeStyle = 'white';
+                    ctx.strokeRect(marginLeft + i * (cardWidth + 20), tableauStartY, cardWidth, cardHeight);
+                }
+            }
+
+            // Render dragging cards
+            if (draggingCards) {
+                const { offsetX, offsetY } = draggingCards;
+                for (let i = 0; i < draggingCards.cards.length; i++) {
+                    const card = draggingCards.cards[i];
+                    renderCard(card, offsetX, offsetY + i * 30);
+                }
+            }
+        }
+
+        function renderCard(card, x, y) {
+            const cardInfo = getCard(card.suit, card.rank);
+            if (!card.faceUp) {
+                renderCardBack(x, y);
+            } else {
+                ctx.drawImage(
+                    cardSprites,
+                    cardInfo.spriteX, cardInfo.spriteY, cardInfo.width, cardInfo.height,
+                    x, y, cardInfo.width, cardInfo.height
+                );
+            }
+        }
+
+        function renderCardBack(x, y) {
+            const cardBack = getCard('back');
+            ctx.drawImage(
+                cardSprites,
+                cardBack.spriteX, cardBack.spriteY, cardBack.width, cardBack.height,
+                x, y, cardBack.width, cardBack.height
+            );
+        }
+
+        function getCard(suit, rank) {
+            const suitIndex = suits.indexOf(suit);
+            const rankIndex = suit === 'back' ? 0 : ranks.indexOf(rank);
+
+            return {
+                spriteX: rankIndex * cardWidth,
+                spriteY: suitIndex * cardHeight,
+                width: cardWidth,
+                height: cardHeight
+            };
+        }
+
+        function addEventListeners() {
+            canvas.addEventListener('mousedown', onMouseDown);
+            canvas.addEventListener('mousemove', onMouseMove);
+            canvas.addEventListener('mouseup', onMouseUp);
+            canvas.addEventListener('click', onClick);
+        }
+
+        function onMouseDown(event) {
+            const { offsetX, offsetY } = event;
+
+            // Check for click on tableau
+            for (let i = tableau.length - 1; i >= 0; i--) {
+                for (let j = tableau[i].length - 1; j >= 0; j--) {
+                    const card = tableau[i][j];
+                    const x = marginLeft + i * (cardWidth + 20);
+                    const y = tableauStartY + j * 30;
+
+                    if (!card.faceUp) continue;  // Block clicking face-down cards
+
+                    if (offsetX >= x && offsetX <= x + cardWidth &&
+                        offsetY >= y && offsetY <= y + cardHeight) {
+                        const cardsToDrag = tableau[i].slice(j); // Get all cards from the selected one downwards
+                        tableau[i].splice(j, tableau[i].length - j); // Properly remove these cards from the tableau
+                        draggingCards = { cards: cardsToDrag, offsetX, offsetY, originalIndex: i };
+                        dragOffsetX = offsetX - x;
+                        dragOffsetY = offsetY - y;
+                        render();
+                        return;
+                    }
+                }
+
+                // Allow dragging a card from an empty tableau slot if it's a King
+                if (tableau[i].length === 0) {
+                    const x = marginLeft + i * (cardWidth + 20);
+                    const y = tableauStartY;
+                    if (offsetX >= x && offsetX <= x + cardWidth &&
+                        offsetY >= y && offsetY <= y + cardHeight) {
+                        if (waste.length > 0 && waste[waste.length - 1].rank === 'K') {
+                            const cardToDrag = waste.pop(); // Remove the King from the waste
+                            draggingCards = { cards: [cardToDrag], offsetX, offsetY, originalIndex: 'waste' };
+                            dragOffsetX = offsetX - x;
+                            dragOffsetY = offsetY - y;
+                            render();
+                        }
+                    }
+                }
+            }
+
+            // Check for click on waste
+            if (waste.length > 0) {
+                const x = marginLeft + cardWidth + 20;
+                const y = marginTop;
+                const card = waste[waste.length - 1];
+                if (offsetX >= x && offsetX <= x + cardWidth &&
+                    offsetY >= y && offsetY <= y + cardHeight) {
+                    draggingCards = { cards: [card], offsetX, offsetY, originalIndex: 'waste' };
+                    dragOffsetX = offsetX - x;
+                    dragOffsetY = offsetY - y;
+                    waste.pop(); // Remove the card from waste for now
+                    render();
+                }
+            }
+        }
+
+        function onMouseMove(event) {
+            if (!draggingCards) return;
+            const { offsetX, offsetY } = event;
+            draggingCards.offsetX = offsetX - dragOffsetX;
+            draggingCards.offsetY = offsetY - dragOffsetY;
+            render();
+        }
+
+        function onMouseUp(event) {
+            if (!draggingCards) return;
+            const { offsetX, offsetY } = event;
+
+            let validMove = false;
+
+            // Try to place on tableau
+            for (let i = 0; i < tableau.length; i++) {
+                const x = marginLeft + i * (cardWidth + 20);
+                const y = tableauStartY + tableau[i].length * 30;
+
+                if (offsetX >= x && offsetX <= x + cardWidth &&
+                    offsetY >= y && offsetY <= y + cardHeight) {
+                    if (isValidMove(draggingCards.cards[0], tableau[i])) {
+                        tableau[i] = tableau[i].concat(draggingCards.cards);
+                        flipTopCard(draggingCards.originalIndex);  // Flip the top card in the original pile
+                        validMove = true;
+                        break;
+                    } else if (tableau[i].length === 0 && draggingCards.cards[0].rank === 'K') {
+                        tableau[i] = tableau[i].concat(draggingCards.cards); // Allow placing a King on empty tableau
+                        validMove = true;
+                        break;
+                    }
+                }
+            }
+
+            // Try to place on foundations
+            if (!validMove) {
+                for (let i = 0; i < foundations.length; i++) {
+                    const x = foundationStartX + i * (cardWidth + 20);
+                    const y = marginTop;
+
+                    if (offsetX >= x && offsetX <= x + cardWidth &&
+                        offsetY >= y && offsetY <= y + cardHeight) {
+                        if (isValidFoundationMove(draggingCards.cards[0], foundations[i])) {
+                            foundations[i] = foundations[i].concat(draggingCards.cards);
+                            flipTopCard(draggingCards.originalIndex);  // Flip the top card in the original pile
+                            validMove = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // If move was not valid, return cards to original location
+            if (!validMove) {
+                if (draggingCards.originalIndex === 'waste') {
+                    waste.push(draggingCards.cards[0]); // Return the card to the waste
+                } else {
+                    tableau[draggingCards.originalIndex] = tableau[draggingCards.originalIndex].concat(draggingCards.cards);
+                }
+            }
+
+            draggingCards = null;
+            render();
+            checkWinCondition();
+        }
+
+        function flipTopCard(pileIndex) {
+            if (pileIndex === 'waste') return; // No need to flip anything in the waste
+
+            const pile = tableau[pileIndex];
+            if (pile.length > 0 && !pile[pile.length - 1].faceUp) {
+                pile[pile.length - 1].faceUp = true;
+            }
+        }
+
+        function isValidMove(card, targetPile) {
+            if (targetPile.length === 0) {
+                return card.rank === 'K';
+            }
+
+            const topCard = targetPile[targetPile.length - 1];
+            return isOppositeColor(card, topCard) && isRankOneLess(card, topCard);
+        }
+
+        function isOppositeColor(card1, card2) {
+            return (['hearts', 'diamonds'].includes(card1.suit) && ['clubs', 'spades'].includes(card2.suit)) ||
+                   (['clubs', 'spades'].includes(card1.suit) && ['hearts', 'diamonds'].includes(card2.suit));
+        }
+
+        function isRankOneLess(card1, card2) {
+            return ranks.indexOf(card1.rank) === ranks.indexOf(card2.rank) - 1;
+        }
+
+        function isValidFoundationMove(card, foundationPile) {
+            if (foundationPile.length === 0) {
+                return card.rank === 'A';
+            }
+
+            const topCard = foundationPile[foundationPile.length - 1];
+            return card.suit === topCard.suit && 
+                (ranks.indexOf(card.rank) === ranks.indexOf(topCard.rank) + 1 || topCard.rank === 'A' && card.rank === '2');
+        }
+
+        function onClick(event) {
+            const { offsetX, offsetY } = event;
+
+            if (offsetX >= marginLeft && offsetX <= marginLeft + cardWidth &&
+                offsetY >= marginTop && offsetY <= marginTop + cardHeight) {
+                if (stock.length > 0) {
+                    waste.push(stock.pop());
+                    waste[waste.length - 1].faceUp = true;
+                    render();
+                } else if (stock.length === 0 && waste.length > 0) {
+                    // Reset the stock from the waste
+                    stock = waste.reverse();
+                    waste = [];
+                    render();
+                }
+            }
+        }
+
+        function checkWinCondition() {
+            if (foundations.every(foundation => foundation.length === 13)) {
+                alert('You won!');
+            }
+        }
+    </script>
+</body>
+</html>
