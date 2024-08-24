@@ -423,7 +423,8 @@
             }
 
             const topCard = foundationPile[foundationPile.length - 1];
-            return card.suit === topCard.suit && ranks.indexOf(card.rank) === ranks.indexOf(topCard.rank) + 1;
+            return card.suit === topCard.suit && 
+                (ranks.indexOf(card.rank) === ranks.indexOf(topCard.rank) + 1 || (topCard.rank === 'A' && card.rank === '2'));
         }
 
         function checkWinCondition() {
