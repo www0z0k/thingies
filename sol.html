@@ -280,6 +280,7 @@
         }
 
         function handleInteractionStart(offsetX, offsetY) {
+            // Check tableau piles
             for (let i = tableau.length - 1; i >= 0; i--) {
                 for (let j = tableau[i].length - 1; j >= 0; j--) {
                     const card = tableau[i][j];
@@ -291,10 +292,10 @@
                     if (offsetX >= x && offsetX <= x + cardWidth &&
                         offsetY >= y && offsetY <= y + cardHeight) {
                         const cardsToDrag = tableau[i].slice(j);
-                        tableau[i].splice(j, tableau[i].length - j);
-                        draggingCards = { cards: cardsToDrag, offsetX: x, offsetY: y, originalIndex: i };
+                        draggingCards = { cards: cardsToDrag, offsetX: x, offsetY: y, originalIndex: i, originalPile: tableau[i] };
                         dragOffsetX = offsetX - x; // Calculate offset relative to click position
                         dragOffsetY = offsetY - y; // Calculate offset relative to click position
+                        tableau[i].splice(j, tableau[i].length - j); // Remove the cards temporarily
                         render();
                         return;
                     }
@@ -307,26 +308,51 @@
                         offsetY >= y && offsetY <= y + cardHeight) {
                         if (waste.length > 0 && waste[waste.length - 1].rank === 'K') {
                             const cardToDrag = waste.pop();
-                            draggingCards = { cards: [cardToDrag], offsetX: x, offsetY: y, originalIndex: 'waste' };
+                            draggingCards = { cards: [cardToDrag], offsetX: x, offsetY: y, originalIndex: 'waste', originalPile: waste };
                             dragOffsetX = offsetX - x; // Calculate offset relative to click position
                             dragOffsetY = offsetY - y; // Calculate offset relative to click position
                             render();
+                            return;
                         }
                     }
                 }
             }
 
+            // Check waste pile
             if (waste.length > 0) {
                 const x = marginLeft + cardWidth + 20;
                 const y = marginTop;
                 const card = waste[waste.length - 1];
                 if (offsetX >= x && offsetX <= x + cardWidth &&
                     offsetY >= y && offsetY <= y + cardHeight) {
-                    draggingCards = { cards: [card], offsetX: x, offsetY: y, originalIndex: 'waste' };
+                    draggingCards = { cards: [card], offsetX: x, offsetY: y, originalIndex: 'waste', originalPile: waste };
                     dragOffsetX = offsetX - x; // Calculate offset relative to click position
                     dragOffsetY = offsetY - y; // Calculate offset relative to click position
                     waste.pop();
                     render();
+                    return;
+                }
+            }
+
+            // Check foundation piles
+            for (let i = 0; i < foundations.length; i++) {
+                const x = foundationStartX + i * (cardWidth + 20);
+                const y = marginTop;
+
+                if (foundations[i].length > 0) {
+                    const card = foundations[i][foundations[i].length - 1];
+
+                    if (offsetX >= x && offsetX <= x + cardWidth &&
+                        offsetY >= y && offsetY <= y + cardHeight) {
+                        if (card.rank !== 'A') {
+                            draggingCards = { cards: [card], offsetX: x, offsetY: y, originalIndex: `foundation${i}`, originalPile: foundations[i] };
+                            foundations[i].pop();
+                            dragOffsetX = offsetX - x; // Calculate offset relative to click position
+                            dragOffsetY = offsetY - y; // Calculate offset relative to click position
+                            render();
+                            return;
+                        }
+                    }
                 }
             }
         }
@@ -351,10 +377,12 @@
                         tableau[i] = tableau[i].concat(draggingCards.cards);
                         flipTopCard(draggingCards.originalIndex);
                         validMove = true;
+                        // console.log('valid 1');
                         break;
                     } else if (tableau[i].length === 0 && draggingCards.cards[0].rank === 'K') {
                         tableau[i] = tableau[i].concat(draggingCards.cards);
                         validMove = true;
+                        // console.log('valid 2');
                         break;
                     }
                 }
@@ -371,6 +399,7 @@
                             foundations[i] = foundations[i].concat(draggingCards.cards);
                             flipTopCard(draggingCards.originalIndex);
                             validMove = true;
+                            // console.log('valid 3');
                             break;
                         }
                     }
@@ -378,20 +407,23 @@
             }
 
             if (!validMove) {
-                if (draggingCards.originalIndex === 'waste') {
-                    waste.push(draggingCards.cards[0]);
-                } else {
-                    tableau[draggingCards.originalIndex] = tableau[draggingCards.originalIndex].concat(draggingCards.cards);
-                }
-            }
+                // Return the cards to their original pile if the move was not valid
+                draggingCards.originalPile.push(...draggingCards.cards);
+            } 
 
+            // Clear the draggingCards object to stop the card from following the cursor
             draggingCards = null;
             render();
             checkWinCondition();
         }
 
+
         function flipTopCard(pileIndex) {
             if (pileIndex === 'waste') return;
+
+            if (String(pileIndex).startsWith('foundation')) {
+                return;
+            }
 
             const pile = tableau[pileIndex];
             if (pile.length > 0 && !pile[pile.length - 1].faceUp) {
