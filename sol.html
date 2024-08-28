@@ -56,7 +56,7 @@
 
         let marginTop = 20;
         let marginLeft = 20;
-        let foundationStartX = marginLeft + 2 * (cardWidth + 20);
+        let foundationStartX = marginLeft + 3 * (cardWidth + 20); // Move foundations to the right
         let tableauStartY = marginTop + cardHeight + 20;
 
         let scaleFactor = 1;
@@ -134,8 +134,22 @@
             }
 
             // Render Waste
-            if (waste.length > 0) {
-                renderCard(waste[waste.length - 1], marginLeft + cardWidth + 20, marginTop);
+            let closedWasteWasRendered = false;
+            let openWasteRendered = 0;
+            for (let i = 0; i < waste.length; i++) {
+                const card = waste[i];
+                if (!card.faceUp) {
+                    if (!closedWasteWasRendered) {
+                        renderCardBack(marginLeft + cardWidth + 20, marginTop);
+                        closedWasteWasRendered = true;
+                    } else {
+                        continue;
+                    }
+                } else {
+                    const x = marginLeft + cardWidth + 20 + openWasteRendered * 25; // Increase offset for visibility
+                    renderCard(card, x, marginTop);
+                    openWasteRendered++;
+                }
             }
 
             // Render Tableau
@@ -252,12 +266,10 @@
             if (offsetX / scaleFactor >= marginLeft && offsetX / scaleFactor <= marginLeft + cardWidth &&
                 offsetY / scaleFactor >= marginTop && offsetY / scaleFactor <= marginTop + cardHeight) {
                 if (stock.length > 0) {
-                    waste.push(stock.pop());
-                    waste[waste.length - 1].faceUp = true;
+                    dealThreeCards();
                     render();
                 } else if (stock.length === 0 && waste.length > 0) {
-                    stock = waste.reverse();
-                    waste = [];
+                    resetStock();
                     render();
                 }
             }
@@ -273,7 +285,7 @@
             canvas.width = windowWidth;
             canvas.height = window.innerHeight;
 
-            foundationStartX = marginLeft + 2 * (cardWidth + 20);
+            foundationStartX = marginLeft + 3 * (cardWidth + 20); // Move foundations to the right
             tableauStartY = marginTop + cardHeight + 20;
 
             render();
@@ -300,27 +312,13 @@
                         return;
                     }
                 }
-
-                if (tableau[i].length === 0) {
-                    const x = marginLeft + i * (cardWidth + 20);
-                    const y = tableauStartY;
-                    if (offsetX >= x && offsetX <= x + cardWidth &&
-                        offsetY >= y && offsetY <= y + cardHeight) {
-                        if (waste.length > 0 && waste[waste.length - 1].rank === 'K') {
-                            const cardToDrag = waste.pop();
-                            draggingCards = { cards: [cardToDrag], offsetX: x, offsetY: y, originalIndex: 'waste', originalPile: waste };
-                            dragOffsetX = offsetX - x; // Calculate offset relative to click position
-                            dragOffsetY = offsetY - y; // Calculate offset relative to click position
-                            render();
-                            return;
-                        }
-                    }
-                }
             }
 
-            // Check waste pile
+            // Check waste pile - only top card draggable
             if (waste.length > 0) {
-                const x = marginLeft + cardWidth + 20;
+                const openWasteCardsCount = waste.filter(card => card.faceUp).length;
+                const x = marginLeft + cardWidth - 5 + openWasteCardsCount * 25; // this -5 is a magic number to avoid jumping on click
+                // marginLeft + cardWidth + 20 + openWasteRendered * 25
                 const y = marginTop;
                 const card = waste[waste.length - 1];
                 if (offsetX >= x && offsetX <= x + cardWidth &&
@@ -357,7 +355,6 @@
             }
         }
 
-
         function handleInteractionMove(offsetX, offsetY) {
             draggingCards.offsetX = offsetX - dragOffsetX;
             draggingCards.offsetY = offsetY - dragOffsetY;
@@ -377,12 +374,10 @@
                         tableau[i] = tableau[i].concat(draggingCards.cards);
                         flipTopCard(draggingCards.originalIndex);
                         validMove = true;
-                        // console.log('valid 1');
                         break;
                     } else if (tableau[i].length === 0 && draggingCards.cards[0].rank === 'K') {
                         tableau[i] = tableau[i].concat(draggingCards.cards);
                         validMove = true;
-                        // console.log('valid 2');
                         break;
                     }
                 }
@@ -399,7 +394,6 @@
                             foundations[i] = foundations[i].concat(draggingCards.cards);
                             flipTopCard(draggingCards.originalIndex);
                             validMove = true;
-                            // console.log('valid 3');
                             break;
                         }
                     }
@@ -409,7 +403,7 @@
             if (!validMove) {
                 // Return the cards to their original pile if the move was not valid
                 draggingCards.originalPile.push(...draggingCards.cards);
-            } 
+            }
 
             // Clear the draggingCards object to stop the card from following the cursor
             draggingCards = null;
@@ -417,6 +411,22 @@
             checkWinCondition();
         }
 
+        // Function to deal three cards from the stock to the waste
+        function dealThreeCards() {
+            const cardsToDeal = Math.min(3, stock.length);
+            waste = waste.map(card => ({ ...card, faceUp: false }));
+            for (let i = 0; i < cardsToDeal; i++) {
+                const card = stock.pop();
+                card.faceUp = true;
+                waste.push(card);
+            }
+        }
+
+        // Function to reset the stock from the waste pile
+        function resetStock() {
+            stock = waste.reverse().map(card => ({ ...card, faceUp: false }));
+            waste = [];
+        }
 
         function flipTopCard(pileIndex) {
             if (pileIndex === 'waste') return;
