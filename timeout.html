@@ -1,0 +1,26 @@
+
+<!DOCTYPE html>
+<html>
+
+  <body>
+    <div id="myelement"></div>
+    <script type="text/javascript">      
+      let timeoutID;
+      const myelement = document.getElementById("myelement");
+      myelement.innerHTML = 'started';
+      function changeContent () {
+          timeoutID = window.setTimeout(() => {
+          	myelement.innerHTML = 'timed out';
+          }, 1000);
+          
+          window.setTimeout(() => {
+          	clearTimeout(timeoutID);      
+            myelement.innerHTML = 'cancelled';
+          }, 500);
+      }      
+      window.onload = changeContent ;
+    </script>
+  </body>
+  
+</html>
+
