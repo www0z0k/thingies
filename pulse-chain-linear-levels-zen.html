@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Pulse Chain Puzzle with Modes</title>
+  <style>
+    body { background: #111; color: #eee; font-family: sans-serif; text-align: center; margin: 0; padding: 20px; }
+    h1 { margin-bottom: 10px; }
+    #grid { display: grid; gap: 5px; justify-content: center; margin: 20px auto; }
+    .tile { width: 50px; height: 50px; line-height: 50px; background: #444; border-radius: 6px; font-size: 18px; cursor: pointer; user-select: none; }
+    .tile[data-val="0"] { background: #222; cursor: default; color: transparent; }
+    .pulse { animation: pulse 0.3s ease-out; }
+    @keyframes pulse { 0% {transform: scale(1);} 50% {transform: scale(1.2); background-color: #fff;} 100% {transform: scale(1);} }
+    #info { margin: 10px; font-size: 18px; }
+    button { margin-top: 10px; padding: 8px 16px; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <h1>Pulse Chain Puzzle</h1>
+  <div id="info"></div>
+  <select id="mode" onchange="changeMode()">
+    <option value="challenge">Challenge Mode</option>
+    <option value="zen">Zen Mode</option>
+  </select>
+  <div id="grid"></div>
+  <button onclick="resetGame()">Restart Level</button>
+
+  <script>
+    let grid, container, rows, cols, level=1, totalScore=0, levelScore=0, mode='challenge';
+
+    function setupLevel() {
+      rows = cols = mode=='challenge'?Math.min(4+Math.floor(level/3),8):6;
+      grid = Array.from({length:rows},()=>Array(cols).fill(0));
+      container=document.getElementById('grid');
+      container.style.gridTemplateColumns=`repeat(${cols},50px)`;
+      container.innerHTML='';
+
+      if(mode=='challenge')for(let i=0;i<level+3;i++)reverseClick();
+      if(mode=='zen')randomFill(10);
+
+      render();
+
+      levelScore=0;
+      updateInfo();
+    }
+
+    function render () {
+        container.innerHTML = '';
+        grid.forEach((r,y)=>r.forEach((val,x)=>{
+            let div=document.createElement('div');
+            div.className='tile';
+            div.dataset.x=x;div.dataset.y=y;div.dataset.val=val;
+            div.innerText=val||'';
+            div.onclick=()=>clickTile(x,y);
+            container.appendChild(div);
+      }));
+    }
+
+    function reverseClick(){
+      let x=Math.floor(Math.random()*cols),y=Math.floor(Math.random()*rows);
+      grid[y][x]++;
+      [[0,-1],[0,1],[-1,0],[1,0]].forEach(([dx,dy])=>{
+        let nx=x+dx,ny=y+dy;
+        if(nx>=0&&ny>=0&&nx<cols&&ny<rows)grid[ny][nx]++;
+      });
+    }
+
+    function randomFill(count){
+      for(let i=0;i<count;i++){
+        let x=Math.floor(Math.random()*cols),y=Math.floor(Math.random()*rows);
+        grid[y][x]=Math.min(grid[y][x]+1,5);
+      }
+    }
+
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+    async function clickTile(x,y){
+      let tile=getTile(x,y);
+      if(!tile||tile.dataset.val<1)return;
+      let pulses=0;
+      [[0,-1],[0,1],[-1,0],[1,0]].forEach(([dx,dy])=>{
+        let neighbor=getTile(x+dx,y+dy);
+        if(neighbor&&neighbor.dataset.val>0){
+          neighbor.dataset.val--;
+          grid[y+dy][x+dx]=Math.max(0,grid[y+dy][x+dx]-1);
+          neighbor.innerText=neighbor.dataset.val||'';
+          pulse(neighbor);
+          pulses++;
+        }
+      });
+      if(pulses||tile.dataset.val==1){
+        tile.dataset.val=Math.max(0,tile.dataset.val-1);
+        grid[y][x]=Math.max(0,grid[y][x]-1);
+        tile.innerText=tile.dataset.val||'';
+        pulse(tile);
+        await sleep(305); // slight delay for pulse effect
+        levelScore++;
+        if(mode=='zen') {
+            randomFill(Math.ceil(Math.random()*3));
+            render();
+        }        
+        checkWin();
+      }
+      updateInfo();
+    }
+
+    function pulse(el){el.classList.remove('pulse');void el.offsetWidth;el.classList.add('pulse');}
+
+    function getTile(x,y){return container.querySelector(`.tile[data-x='${x}'][data-y='${y}']`);}
+
+    function checkWin(){
+      if(mode=='challenge'&&[...container.children].every(t=>t.dataset.val==0)){
+        totalScore+=Math.max(0,(rows*cols)-levelScore);
+        setTimeout(()=>{
+          alert(`Level ${level} cleared!\nLevel Score: ${Math.max(0,(rows*cols)-levelScore)}\nTotal Score: ${totalScore}`);
+          level++;
+          setupLevel();
+        },300);
+      }
+    }
+
+    function resetGame(){setupLevel();}
+
+    function updateInfo(){
+      document.getElementById('info').innerText=`Mode: ${mode.charAt(0).toUpperCase()+mode.slice(1)} | Level: ${level} | Score: ${Math.max(0,(rows*cols)-levelScore)} | Total Score: ${totalScore}`;
+    }
+
+    function changeMode(){
+      mode=document.getElementById('mode').value;
+      level=1;totalScore=0;
+      setupLevel();
+    }
+
+    setupLevel();
+  </script>
+</body>
+</html>
