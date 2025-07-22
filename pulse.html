@@ -2,30 +2,28 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Pulse Chain Puzzle with Modes & Concentric Circles</title>
+  <title>Pulse Chain Puzzle — Bubble Style</title>
   <style>
     body { background: #111; color: #eee; font-family: sans-serif; text-align: center; margin: 0; padding: 20px; }
     h1 { margin-bottom: 10px; }
     #grid { display: grid; gap: 5px; justify-content: center; margin: 20px auto; }
-    .tile, .tile-canvas { width: 50px; height: 50px; }
-    .tile {
-      background: #444;
-      border-radius: 6px;
+    .tile, .tile-bubble {
+      width: 50px; height: 50px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 12px;
       font-size: 18px;
       cursor: pointer;
       user-select: none;
       position: relative;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: box-shadow 0.15s;
       overflow: hidden;
+      transition: box-shadow 0.15s;
     }
-    .tile[data-val="0"] {
-      background: #222;
+    .tile[data-val="0"], .tile-bubble[data-val="0"] {
+      background: #222 !important;
       cursor: default;
       color: transparent;
     }
+    /* Pulse animation */
     .pulse { animation: pulse 0.3s ease-out; }
     @keyframes pulse {
       0% { transform: scale(1); box-shadow: 0 0 12px #8cf7ff; }
@@ -33,18 +31,63 @@
       100% { transform: scale(1); box-shadow: none; }
     }
     .value-text {
-      position: absolute;
-      right: 5px;
-      bottom: 2px;
-      font-size: 12px;
-      color: #fff;
+      position: absolute; right: 5px; bottom: 2px; font-size: 12px; color: #fff;
       text-shadow: 1px 1px 2px #111, 0 0 2px #000;
-      pointer-events: none;
-      user-select: none;
+      pointer-events: none; user-select: none;
+      z-index: 2;
     }
-    #info { margin: 10px; font-size: 18px; }
     button, select { margin-top: 10px; padding: 8px 16px; font-size: 16px; }
     #displayToggleLabel { font-size: 16px; margin-left: 12px; }
+    /* Bubble CSS for values 1–9 */
+    .tile-bubble {
+      background: #333;
+      box-shadow: 0 0 6px #99d5ff44;
+    }
+    .tile-bubble[data-val="1"] {
+      background:
+        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.19) 10%, transparent 55%),
+        radial-gradient(circle at 50% 50%, #aee8ff44 70%, #333 100%);
+    }
+    .tile-bubble[data-val="2"] {
+      background:
+        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.23) 10%, transparent 56%),
+        radial-gradient(circle at 50% 56%, #84c8fa66 66%, #338cf188 86%, #333 100%);
+    }
+    .tile-bubble[data-val="3"] {
+      background:
+        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.28) 12%, transparent 58%),
+        radial-gradient(circle at 45% 60%, #6ec2fa99 62%, #217bceb0 87%, #333 100%);
+    }
+    .tile-bubble[data-val="4"] {
+      background:
+        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.32) 14%, transparent 61%),
+        radial-gradient(circle at 52% 48%, #58b2faee 60%, #1366bdcc 90%, #333 100%);
+    }
+    .tile-bubble[data-val="5"] {
+      background:
+        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.36) 15%, transparent 63%),
+        radial-gradient(circle at 52% 52%, #2990e5ee 58%, #0356aacc 88%, #333 100%);
+    }
+    .tile-bubble[data-val="6"] {
+      background:
+        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.40) 16%, transparent 66%),
+        radial-gradient(circle at 50% 54%, #1572d8ff 56%, #0a326b 90%, #333 100%);
+    }
+    .tile-bubble[data-val="7"] {
+      background:
+        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.44) 16%, transparent 70%),
+        radial-gradient(circle at 52% 49%, #2f8be5ff 53%, #17305bff 90%, #333 100%);
+    }
+    .tile-bubble[data-val="8"] {
+      background:
+        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.49) 18%, transparent 75%),
+        radial-gradient(circle at 54% 54%, #2278d6ff 51%, #112c5dff 92%, #333 100%);
+    }
+    .tile-bubble[data-val="9"] {
+      background:
+        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.54) 19%, transparent 80%),
+        radial-gradient(circle at 50% 50%, #0d4ebdff 48%, #061739ff 95%, #333 100%);
+    }
   </style>
 </head>
 <body>
@@ -56,7 +99,7 @@
   </select>
   <label id="displayToggleLabel">
     <input type="checkbox" id="displayToggle" onchange="render()" />
-    Concentric Circles View
+    Bubble CSS View
   </label>
   <div id="grid"></div>
   <button onclick="resetGame()">Restart Level</button>
@@ -64,8 +107,8 @@
   <script>
     let grid, container, rows, cols, level=1, totalScore=0, levelScore=0, mode='challenge';
     let initialGrid, initialScore;
-    let displayMode = 'classic'; // or 'concentric'
-    let pulseQueue = []; // [{x,y}] to animate
+    let displayMode = 'classic'; // or 'bubble'
+    let pulseQueue = [];
 
     function setupLevel() {
       rows = cols = mode=='challenge'?Math.min(4+Math.floor(level/3),8):6;
@@ -95,12 +138,12 @@
     }
 
     function render() {
-      displayMode = document.getElementById('displayToggle').checked ? 'concentric' : 'classic';
+      displayMode = document.getElementById('displayToggle').checked ? 'bubble' : 'classic';
       container.innerHTML = '';
       grid.forEach((r, y) => r.forEach((val, x) => {
-        if (displayMode === 'concentric') {
+        if (displayMode === 'bubble') {
           let tile = document.createElement('div');
-          tile.className = 'tile';
+          tile.className = 'tile-bubble';
           tile.dataset.x = x;
           tile.dataset.y = y;
           tile.dataset.val = val;
@@ -110,14 +153,7 @@
             tile.classList.add('pulse');
             setTimeout(() => tile.classList.remove('pulse'), 330);
           }
-
-          if(val > 0) {
-            let canvas = document.createElement('canvas');
-            canvas.width = canvas.height = 50;
-            canvas.className = 'tile-canvas';
-            drawCircles(canvas, val, 50);
-            tile.appendChild(canvas);
-
+          if (val > 0) {
             let valText = document.createElement('div');
             valText.className = 'value-text';
             valText.textContent = val;
@@ -142,23 +178,6 @@
       pulseQueue = [];
     }
 
-    function drawCircles(canvas, value, size = 50) {
-      let ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, size, size);
-      let maxAlpha = 0.38, minAlpha = 0.13;
-      let minRadius = size * 0.18, maxRadius = size * 0.46;
-      let color = [100,180,255]; // Light blue
-      for (let i = 0; i < value; ++i) {
-        let t = i / value;
-        let radius = maxRadius - t * (maxRadius - minRadius);
-        let alpha = minAlpha + t * (maxAlpha - minAlpha);
-        ctx.beginPath();
-        ctx.arc(size/2, size/2, radius, 0, 2 * Math.PI, false);
-        ctx.fillStyle = `rgba(${color[0]},${color[1]},${color[2]},${alpha.toFixed(2)})`;
-        ctx.fill();
-      }
-    }
-
     function reverseClick() {
       let x = Math.floor(Math.random() * cols), y = Math.floor(Math.random() * rows);
       grid[y][x]++;
@@ -171,7 +190,7 @@
     function randomFill(count) {
       for(let i=0; i<count; i++) {
         let x=Math.floor(Math.random()*cols), y=Math.floor(Math.random()*rows);
-        grid[y][x]=Math.min(grid[y][x]+1,5);
+        grid[y][x]=Math.min(grid[y][x]+1,9);
       }
     }
 
@@ -197,7 +216,6 @@
         if (mode==='zen') {
           randomFill(Math.ceil(Math.random()*5));
         }
-        // Show pulses on affected tiles + center
         pulseQueue = [...pulses, [x, y]];
         render();
         await sleep(330);
@@ -216,11 +234,10 @@
     }
 
     function getTile(x,y) {
-      return container.querySelector(`.tile[data-x='${x}'][data-y='${y}']`);
+      return container.querySelector(`.tile, .tile-bubble[data-x='${x}'][data-y='${y}']`);
     }
 
     function shouldPulse(x, y) {
-      // For use in render; returns true if this tile was just pulsed
       return pulseQueue.some(([px,py]) => px===x && py===y);
     }
 
@@ -255,7 +272,7 @@
         grid: grid.map(row => row.slice()),
         levelScore: levelScore
       });
-      if (history.length > 200) history.shift(); // prevent runaway memory usage
+      if (history.length > 200) history.shift();
     }
     function undoMove() {
       if (!history.length) return;
@@ -266,7 +283,6 @@
       updateInfo();
     }
 
-    // Add undo button
     (function addUndoBtn() {
       let btn = document.createElement('button');
       btn.innerText = 'Undo';
