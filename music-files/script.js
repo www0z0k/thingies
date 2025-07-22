@@ -309,10 +309,10 @@ const drawVisualizations = () => {
 
 drawVisualizations();
 
-const createOscillator = (frequency) => {
+const generateOscillator = (frequency, type) => {
   const oscillator = audioContext.createOscillator();
   const gain = audioContext.createGain();
-  oscillator.type = 'sine';
+  oscillator.type = type || 'sine';
   oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
   gain.gain.value = pianoGainNode.gain.value;
 
@@ -326,7 +326,7 @@ const startOscillator = (key) => {
 
   const frequency = frequencies[keyMapping[key]];
   if (frequency && !activeOscillators.has(key)) {
-    const { oscillator, gain } = createOscillator(frequency);
+    const { oscillator, gain } = generateOscillator(frequency);
     oscillator.connect(analyser);
     oscillator.start();
     activeOscillators.set(key, { oscillator, gain });
