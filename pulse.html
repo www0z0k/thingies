@@ -2,172 +2,109 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Pulse Chain Puzzle — Adaptive</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+  <title>Pulse Chain Puzzle — Bubble Style</title>
   <style>
-    :root {
-      --tile-size: clamp(34px, 9vw, 64px);
-    }
-    html, body {
-      background: #111; color: #eee; font-family: sans-serif;
-      margin: 0; min-height: 100vh;
-    }
-    body {
-      display: flex; flex-direction: column; align-items: center;
-      min-height: 100vh; padding: 0; box-sizing: border-box;
-    }
-    h1 {
-      margin: 2vh 0 0.5em 0;
-      font-size: clamp(1.25rem, 4vw, 2.1rem);
-      letter-spacing: 0.02em;
-    }
-    #info {
-      margin: 8px 0;
-      font-size: clamp(0.98rem, 2vw, 1.16rem);
-      word-break: break-all;
-      max-width: 96vw;
-    }
-    .controls-row {
-      display: flex; flex-wrap: wrap; gap: 8px;
-      justify-content: center; align-items: center; margin: 0.5em 0 0 0;
-    }
-    button, select, label {
-      font-size: clamp(0.95rem, 2vw, 1.12rem);
-      padding: 0.45em 1.1em;
-      border-radius: 8px; border: none;
-      margin: 0 2px 0 0;
-      background: #1e2833;
-      color: #eee;
-      cursor: pointer;
-      transition: background 0.14s;
-    }
-    button:active, select:active { background: #223649; }
-    #displayToggleLabel {
-      font-size: clamp(0.96rem, 2vw, 1.08rem);
-      margin: 0 0.4em;
-      white-space: nowrap;
-    }
-    #grid {
-      display: grid;
-      gap: 5px;
-      justify-content: center;
-      margin: 2.3vh auto 1em auto;
-      max-width: 99vw;
-      min-height: 30vh;
-      overflow-x: auto;
-      /* grid-template-columns is set in JS */
-    }
+    body { background: #111; color: #eee; font-family: sans-serif; text-align: center; margin: 0; padding: 20px; }
+    h1 { margin-bottom: 10px; }
+    #grid { display: grid; gap: 5px; justify-content: center; margin: 20px auto; }
     .tile, .tile-bubble {
-      width: var(--tile-size);
-      height: var(--tile-size);
-      font-size: calc(var(--tile-size) * 0.36);
-      border-radius: 20%;
-      margin: 1.5px;
-      display: flex; align-items: center; justify-content: center;
-      position: relative; overflow: visible;
-      cursor: pointer;
-      user-select: none;
-      background: #444;
-      box-shadow: none;
-      transition: background 0.13s, box-shadow 0.18s, filter 0.2s;
-      will-change: transform, filter;
-    }
-    .tile[data-val="0"], .tile-bubble[data-val="0"] {
-      background: #181a1f !important;
-      cursor: default; color: transparent;
-      box-shadow: none;
-    }
-    /* Pulse animation: pop-it effect */
-    .tile-bubble.pulse, .tile.pulse {
-      animation: popit-in 0.32s cubic-bezier(.35,1.8,.6,1.03);
-      z-index: 2;
-    }
-    @keyframes popit-in {
-      0%   { transform: scale(1); filter: brightness(1.10);}
-      35%  { transform: scale(0.88); filter: brightness(1.20);}
-      80%  { transform: scale(1.08); filter: brightness(1.08);}
-      100% { transform: scale(1); filter: brightness(1); }
-    }
+  width: 50px; height: 50px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 20%;
+  font-size: 18px;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  overflow: visible;
+  margin: 3px;
+  box-shadow: none;
+  transition: box-shadow 0.2s, filter 0.2s;
+  background: #333;
+  will-change: transform, filter;
+}
+.tile-bubble.pulse {
+  animation: popit-in 0.32s cubic-bezier(.35,1.8,.6,1.03);
+}
+@keyframes popit-in {
+  0%   { transform: scale(1); filter: brightness(1.1); }
+  30%  { transform: scale(0.88); filter: brightness(1.2);}
+  70%  { transform: scale(1.08); filter: brightness(1.08);}
+  100% { transform: scale(1); filter: brightness(1); }
+}
+.tile-bubble::before { display: none; }
+.value-text {
+  position: absolute; right: 7px; bottom: 2px; font-size: 13px; color: #fff;
+  text-shadow: 1px 1px 2px #111, 0 0 2px #000;
+  pointer-events: none; user-select: none; z-index: 2;
+}
+    button, select { margin-top: 10px; padding: 8px 16px; font-size: 16px; }
+    #displayToggleLabel { font-size: 16px; margin-left: 12px; }
     /* Bubble CSS for values 1–9 */
     .tile-bubble {
-      background: #232833;
-      box-shadow: 0 0 0.9vw #97d6ff22;
+      background: #333;
+      box-shadow: 0 0 6px #99d5ff44;
     }
     .tile-bubble[data-val="1"] {
       background:
-        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.18) 12%, transparent 60%),
-        radial-gradient(circle at 50% 52%, #aee8ff33 72%, #333 100%);
+        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.19) 10%, transparent 55%),
+        radial-gradient(circle at 50% 50%, #aee8ff44 70%, #333 100%);
     }
     .tile-bubble[data-val="2"] {
       background:
-        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.22) 14%, transparent 61%),
-        radial-gradient(circle at 48% 58%, #88c8fb66 68%, #338cf170 89%, #333 100%);
+        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.23) 10%, transparent 56%),
+        radial-gradient(circle at 50% 56%, #84c8fa66 66%, #338cf188 86%, #333 100%);
     }
     .tile-bubble[data-val="3"] {
       background:
-        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.25) 15%, transparent 62%),
-        radial-gradient(circle at 48% 62%, #73bcfa99 64%, #217bcead 92%, #333 100%);
+        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.28) 12%, transparent 58%),
+        radial-gradient(circle at 45% 60%, #6ec2fa99 62%, #217bceb0 87%, #333 100%);
     }
     .tile-bubble[data-val="4"] {
       background:
-        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.28) 15%, transparent 65%),
-        radial-gradient(circle at 51% 54%, #58b2faee 61%, #1366bdcc 95%, #333 100%);
+        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.32) 14%, transparent 61%),
+        radial-gradient(circle at 52% 48%, #58b2faee 60%, #1366bdcc 90%, #333 100%);
     }
     .tile-bubble[data-val="5"] {
       background:
-        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.33) 16%, transparent 67%),
-        radial-gradient(circle at 50% 50%, #2990e5ee 57%, #0356aacc 92%, #333 100%);
+        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.36) 15%, transparent 63%),
+        radial-gradient(circle at 52% 52%, #2990e5ee 58%, #0356aacc 88%, #333 100%);
     }
     .tile-bubble[data-val="6"] {
       background:
-        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.38) 16%, transparent 70%),
-        radial-gradient(circle at 50% 54%, #1572d8ff 56%, #0a326b 93%, #333 100%);
+        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.40) 16%, transparent 66%),
+        radial-gradient(circle at 50% 54%, #1572d8ff 56%, #0a326b 90%, #333 100%);
     }
     .tile-bubble[data-val="7"] {
       background:
-        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.44) 18%, transparent 73%),
-        radial-gradient(circle at 52% 49%, #2f8be5ff 54%, #17305bff 95%, #333 100%);
+        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.44) 16%, transparent 70%),
+        radial-gradient(circle at 52% 49%, #2f8be5ff 53%, #17305bff 90%, #333 100%);
     }
     .tile-bubble[data-val="8"] {
       background:
         radial-gradient(circle at 60% 30%, rgba(255,255,255,0.49) 18%, transparent 75%),
-        radial-gradient(circle at 54% 54%, #2278d6ff 51%, #112c5dff 96%, #333 100%);
+        radial-gradient(circle at 54% 54%, #2278d6ff 51%, #112c5dff 92%, #333 100%);
     }
     .tile-bubble[data-val="9"] {
       background:
-        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.54) 19%, transparent 78%),
-        radial-gradient(circle at 50% 50%, #0d4ebdff 48%, #061739ff 98%, #333 100%);
-    }
-    .value-text {
-      position: absolute; right: 6px; bottom: 2px;
-      font-size: calc(var(--tile-size) * 0.24);
-      color: #fff;
-      text-shadow: 1px 1px 2px #111, 0 0 2px #000;
-      pointer-events: none; user-select: none; z-index: 2;
-    }
-    @media (max-width: 650px) {
-      #grid { gap: 2.3px; }
-      h1 { font-size: 1.1rem; }
-      .controls-row { flex-direction: column; gap: 3px; }
+        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.54) 19%, transparent 80%),
+        radial-gradient(circle at 50% 50%, #0d4ebdff 48%, #061739ff 95%, #333 100%);
     }
   </style>
 </head>
 <body>
   <h1>Pulse Chain Puzzle</h1>
   <div id="info"></div>
-  <div class="controls-row">
-    <select id="mode" onchange="changeMode()">
-      <option value="challenge">Challenge Mode</option>
-      <option value="zen">Zen Mode</option>
-    </select>
-    <label id="displayToggleLabel">
-      <input type="checkbox" id="displayToggle" onchange="render()" />
-      Bubble CSS View
-    </label>
-    <button onclick="undoMove()">Undo</button>
-  </div>
+  <select id="mode" onchange="changeMode()">
+    <option value="challenge">Challenge Mode</option>
+    <option value="zen">Zen Mode</option>
+  </select>
+  <label id="displayToggleLabel">
+    <input type="checkbox" id="displayToggle" onchange="render()" />
+    Bubble CSS View
+  </label>
   <div id="grid"></div>
-  <button onclick="resetGame()" style="margin-top:1em;">Restart Level</button>
+  <button onclick="resetGame()">Restart Level</button>
+
   <script>
     let grid, container, rows, cols, level=1, totalScore=0, levelScore=0, mode='challenge';
     let initialGrid, initialScore;
@@ -178,24 +115,29 @@
       rows = cols = mode=='challenge'?Math.min(4+Math.floor(level/3),8):6;
       grid = Array.from({length:rows},()=>Array(cols).fill(0));
       container = document.getElementById('grid');
-      container.style.gridTemplateColumns = `repeat(${cols}, var(--tile-size))`;
+      container.style.gridTemplateColumns = `repeat(${cols},50px)`;
+
       if(mode=='challenge')for(let i=0;i<level+3;i++)reverseClick();
       if(mode=='zen')randomFill(10);
+
       levelScore = 0;
       saveInitial();
       render();
       updateInfo();
     }
+
     function saveInitial() {
       initialGrid = grid.map(row => row.slice());
       initialScore = levelScore;
     }
+
     function restoreInitial() {
       grid = initialGrid.map(row => row.slice());
       levelScore = initialScore;
       render();
       updateInfo();
     }
+
     function render() {
       displayMode = document.getElementById('displayToggle').checked ? 'bubble' : 'classic';
       container.innerHTML = '';
@@ -207,6 +149,7 @@
           tile.dataset.y = y;
           tile.dataset.val = val;
           tile.onclick = () => clickTile(x, y);
+
           if (shouldPulse(x, y)) {
             tile.classList.add('pulse');
             setTimeout(() => tile.classList.remove('pulse'), 330);
@@ -224,15 +167,18 @@
           div.dataset.x = x; div.dataset.y = y; div.dataset.val = val;
           div.innerText = val || '';
           div.onclick = () => clickTile(x, y);
+
           if (shouldPulse(x, y)) {
             div.classList.add('pulse');
             setTimeout(() => div.classList.remove('pulse'), 330);
           }
+
           container.appendChild(div);
         }
       }));
       pulseQueue = [];
     }
+
     function reverseClick() {
       let x = Math.floor(Math.random() * cols), y = Math.floor(Math.random() * rows);
       grid[y][x]++;
@@ -241,13 +187,16 @@
         if(nx>=0 && ny>=0 && nx<cols && ny<rows) grid[ny][nx]++;
       });
     }
+
     function randomFill(count) {
       for(let i=0; i<count; i++) {
         let x=Math.floor(Math.random()*cols), y=Math.floor(Math.random()*rows);
         grid[y][x]=Math.min(grid[y][x]+1,9);
       }
     }
+
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
     async function clickTile(x, y) {
       let tile = getTile(x, y);
       if (!tile || getVal(x,y)<1) return;
@@ -265,7 +214,9 @@
         grid[y][x]=Math.max(0,grid[y][x]-1);
         centerPulse = true;
         levelScore++;
-        if (mode==='zen') randomFill(Math.ceil(Math.random()*5));
+        if (mode==='zen') {
+          randomFill(Math.ceil(Math.random()*5));
+        }
         pulseQueue = [...pulses, [x, y]];
         render();
         await sleep(330);
@@ -273,19 +224,24 @@
       }
       updateInfo();
     }
+
     function getVal(x,y) {
       if (!inBounds(x,y)) return 0;
       return grid[y][x];
     }
+
     function inBounds(x,y) {
       return x>=0&&y>=0&&x<cols&&y<rows;
     }
+
     function getTile(x,y) {
-      return container.querySelector(`.tile[data-x='${x}'][data-y='${y}'], .tile-bubble[data-x='${x}'][data-y='${y}']`);
+      return container.querySelector(`.tile, .tile-bubble[data-x='${x}'][data-y='${y}']`);
     }
+
     function shouldPulse(x, y) {
       return pulseQueue.some(([px,py]) => px===x && py===y);
     }
+
     function checkWin() {
       if (mode==='challenge' && grid.flat().every(v => v===0)) {
         totalScore += Math.max(0, (rows*cols)-levelScore);
@@ -296,17 +252,21 @@
         }, 300);
       }
     }
+
     function resetGame() { restoreInitial(); }
+
     function updateInfo() {
       document.getElementById('info').innerText =
         `Mode: ${mode.charAt(0).toUpperCase()+mode.slice(1)} | Level: ${level} | Score: ${Math.max(0,(rows*cols)-levelScore)} | Total Score: ${totalScore}`;
     }
+
     function changeMode() {
       mode = document.getElementById('mode').value;
       level = 1; totalScore = 0;
       setupLevel();
     }
-    // Undo implementation
+
+    // Undo implementation (stores a history of moves)
     let history = [];
     function saveState() {
       history.push({
@@ -323,6 +283,15 @@
       render();
       updateInfo();
     }
+
+    (function addUndoBtn() {
+      let btn = document.createElement('button');
+      btn.innerText = 'Undo';
+      btn.onclick = undoMove;
+      btn.style.marginLeft = '10px';
+      document.body.insertBefore(btn, document.getElementById('grid'));
+    })();
+
     setupLevel();
   </script>
 </body>
