@@ -19,6 +19,7 @@
       align-items: center;
       justify-content: center;
       transition: box-shadow 0.15s;
+      overflow: hidden;
     }
     .tile[data-val="0"] {
       background: #222;
@@ -64,6 +65,7 @@
     let grid, container, rows, cols, level=1, totalScore=0, levelScore=0, mode='challenge';
     let initialGrid, initialScore;
     let displayMode = 'classic'; // or 'concentric'
+    let pulseQueue = []; // [{x,y}] to animate
 
     function setupLevel() {
       rows = cols = mode=='challenge'?Math.min(4+Math.floor(level/3),8):6;
@@ -103,6 +105,12 @@
           tile.dataset.y = y;
           tile.dataset.val = val;
           tile.onclick = () => clickTile(x, y);
+
+          if (shouldPulse(x, y)) {
+            tile.classList.add('pulse');
+            setTimeout(() => tile.classList.remove('pulse'), 330);
+          }
+
           if(val > 0) {
             let canvas = document.createElement('canvas');
             canvas.width = canvas.height = 50;
@@ -122,9 +130,16 @@
           div.dataset.x = x; div.dataset.y = y; div.dataset.val = val;
           div.innerText = val || '';
           div.onclick = () => clickTile(x, y);
+
+          if (shouldPulse(x, y)) {
+            div.classList.add('pulse');
+            setTimeout(() => div.classList.remove('pulse'), 330);
+          }
+
           container.appendChild(div);
         }
       }));
+      pulseQueue = [];
     }
 
     function drawCircles(canvas, value, size = 50) {
@@ -166,22 +181,26 @@
       let tile = getTile(x, y);
       if (!tile || getVal(x,y)<1) return;
       saveState();
-      let pulses=0;
+      let pulses = [];
       [[0,-1],[0,1],[-1,0],[1,0]].forEach(([dx,dy]) => {
         let nx=x+dx, ny=y+dy;
         if (inBounds(nx,ny) && grid[ny][nx]>0) {
           grid[ny][nx]=Math.max(0,grid[ny][nx]-1);
-          pulses++;
+          pulses.push([nx, ny]);
         }
       });
-      if (pulses || grid[y][x] === 1) {
+      let centerPulse = false;
+      if (pulses.length || grid[y][x] === 1) {
         grid[y][x]=Math.max(0,grid[y][x]-1);
-        await sleep(305);
+        centerPulse = true;
         levelScore++;
         if (mode==='zen') {
           randomFill(Math.ceil(Math.random()*5));
         }
+        // Show pulses on affected tiles + center
+        pulseQueue = [...pulses, [x, y]];
         render();
+        await sleep(330);
         checkWin();
       }
       updateInfo();
@@ -198,6 +217,11 @@
 
     function getTile(x,y) {
       return container.querySelector(`.tile[data-x='${x}'][data-y='${y}']`);
+    }
+
+    function shouldPulse(x, y) {
+      // For use in render; returns true if this tile was just pulsed
+      return pulseQueue.some(([px,py]) => px===x && py===y);
     }
 
     function checkWin() {
