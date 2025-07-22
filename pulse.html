@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Pulse Chain Puzzle with Modes & Concentric Circles</title>
+  <style>
+    body { background: #111; color: #eee; font-family: sans-serif; text-align: center; margin: 0; padding: 20px; }
+    h1 { margin-bottom: 10px; }
+    #grid { display: grid; gap: 5px; justify-content: center; margin: 20px auto; }
+    .tile, .tile-canvas { width: 50px; height: 50px; }
+    .tile {
+      background: #444;
+      border-radius: 6px;
+      font-size: 18px;
+      cursor: pointer;
+      user-select: none;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: box-shadow 0.15s;
+    }
+    .tile[data-val="0"] {
+      background: #222;
+      cursor: default;
+      color: transparent;
+    }
+    .pulse { animation: pulse 0.3s ease-out; }
+    @keyframes pulse {
+      0% { transform: scale(1); box-shadow: 0 0 12px #8cf7ff; }
+      50% { transform: scale(1.18); box-shadow: 0 0 28px #b6e3ff; }
+      100% { transform: scale(1); box-shadow: none; }
+    }
+    .value-text {
+      position: absolute;
+      right: 5px;
+      bottom: 2px;
+      font-size: 12px;
+      color: #fff;
+      text-shadow: 1px 1px 2px #111, 0 0 2px #000;
+      pointer-events: none;
+      user-select: none;
+    }
+    #info { margin: 10px; font-size: 18px; }
+    button, select { margin-top: 10px; padding: 8px 16px; font-size: 16px; }
+    #displayToggleLabel { font-size: 16px; margin-left: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Pulse Chain Puzzle</h1>
+  <div id="info"></div>
+  <select id="mode" onchange="changeMode()">
+    <option value="challenge">Challenge Mode</option>
+    <option value="zen">Zen Mode</option>
+  </select>
+  <label id="displayToggleLabel">
+    <input type="checkbox" id="displayToggle" onchange="render()" />
+    Concentric Circles View
+  </label>
+  <div id="grid"></div>
+  <button onclick="resetGame()">Restart Level</button>
+
+  <script>
+    let grid, container, rows, cols, level=1, totalScore=0, levelScore=0, mode='challenge';
+    let initialGrid, initialScore;
+    let displayMode = 'classic'; // or 'concentric'
+
+    function setupLevel() {
+      rows = cols = mode=='challenge'?Math.min(4+Math.floor(level/3),8):6;
+      grid = Array.from({length:rows},()=>Array(cols).fill(0));
+      container = document.getElementById('grid');
+      container.style.gridTemplateColumns = `repeat(${cols},50px)`;
+
+      if(mode=='challenge')for(let i=0;i<level+3;i++)reverseClick();
+      if(mode=='zen')randomFill(10);
+
+      levelScore = 0;
+      saveInitial();
+      render();
+      updateInfo();
+    }
+
+    function saveInitial() {
+      initialGrid = grid.map(row => row.slice());
+      initialScore = levelScore;
+    }
+
+    function restoreInitial() {
+      grid = initialGrid.map(row => row.slice());
+      levelScore = initialScore;
+      render();
+      updateInfo();
+    }
+
+    function render() {
+      displayMode = document.getElementById('displayToggle').checked ? 'concentric' : 'classic';
+      container.innerHTML = '';
+      grid.forEach((r, y) => r.forEach((val, x) => {
+        if (displayMode === 'concentric') {
+          let tile = document.createElement('div');
+          tile.className = 'tile';
+          tile.dataset.x = x;
+          tile.dataset.y = y;
+          tile.dataset.val = val;
+          tile.onclick = () => clickTile(x, y);
+          if(val > 0) {
+            let canvas = document.createElement('canvas');
+            canvas.width = canvas.height = 50;
+            canvas.className = 'tile-canvas';
+            drawCircles(canvas, val, 50);
+            tile.appendChild(canvas);
+
+            let valText = document.createElement('div');
+            valText.className = 'value-text';
+            valText.textContent = val;
+            tile.appendChild(valText);
+          }
+          container.appendChild(tile);
+        } else {
+          let div = document.createElement('div');
+          div.className = 'tile';
+          div.dataset.x = x; div.dataset.y = y; div.dataset.val = val;
+          div.innerText = val || '';
+          div.onclick = () => clickTile(x, y);
+          container.appendChild(div);
+        }
+      }));
+    }
+
+    function drawCircles(canvas, value, size = 50) {
+      let ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, size, size);
+      let maxAlpha = 0.38, minAlpha = 0.13;
+      let minRadius = size * 0.18, maxRadius = size * 0.46;
+      let color = [100,180,255]; // Light blue
+      for (let i = 0; i < value; ++i) {
+        let t = i / value;
+        let radius = maxRadius - t * (maxRadius - minRadius);
+        let alpha = minAlpha + t * (maxAlpha - minAlpha);
+        ctx.beginPath();
+        ctx.arc(size/2, size/2, radius, 0, 2 * Math.PI, false);
+        ctx.fillStyle = `rgba(${color[0]},${color[1]},${color[2]},${alpha.toFixed(2)})`;
+        ctx.fill();
+      }
+    }
+
+    function reverseClick() {
+      let x = Math.floor(Math.random() * cols), y = Math.floor(Math.random() * rows);
+      grid[y][x]++;
+      [[0,-1],[0,1],[-1,0],[1,0]].forEach(([dx,dy]) => {
+        let nx = x+dx, ny = y+dy;
+        if(nx>=0 && ny>=0 && nx<cols && ny<rows) grid[ny][nx]++;
+      });
+    }
+
+    function randomFill(count) {
+      for(let i=0; i<count; i++) {
+        let x=Math.floor(Math.random()*cols), y=Math.floor(Math.random()*rows);
+        grid[y][x]=Math.min(grid[y][x]+1,5);
+      }
+    }
+
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+    async function clickTile(x, y) {
+      let tile = getTile(x, y);
+      if (!tile || getVal(x,y)<1) return;
+      saveState();
+      let pulses=0;
+      [[0,-1],[0,1],[-1,0],[1,0]].forEach(([dx,dy]) => {
+        let nx=x+dx, ny=y+dy;
+        if (inBounds(nx,ny) && grid[ny][nx]>0) {
+          grid[ny][nx]=Math.max(0,grid[ny][nx]-1);
+          pulses++;
+        }
+      });
+      if (pulses || grid[y][x] === 1) {
+        grid[y][x]=Math.max(0,grid[y][x]-1);
+        await sleep(305);
+        levelScore++;
+        if (mode==='zen') {
+          randomFill(Math.ceil(Math.random()*5));
+        }
+        render();
+        checkWin();
+      }
+      updateInfo();
+    }
+
+    function getVal(x,y) {
+      if (!inBounds(x,y)) return 0;
+      return grid[y][x];
+    }
+
+    function inBounds(x,y) {
+      return x>=0&&y>=0&&x<cols&&y<rows;
+    }
+
+    function getTile(x,y) {
+      return container.querySelector(`.tile[data-x='${x}'][data-y='${y}']`);
+    }
+
+    function checkWin() {
+      if (mode==='challenge' && grid.flat().every(v => v===0)) {
+        totalScore += Math.max(0, (rows*cols)-levelScore);
+        setTimeout(() => {
+          alert(`Level ${level} cleared!\nLevel Score: ${Math.max(0,(rows*cols)-levelScore)}\nTotal Score: ${totalScore}`);
+          level++;
+          setupLevel();
+        }, 300);
+      }
+    }
+
+    function resetGame() { restoreInitial(); }
+
+    function updateInfo() {
+      document.getElementById('info').innerText =
+        `Mode: ${mode.charAt(0).toUpperCase()+mode.slice(1)} | Level: ${level} | Score: ${Math.max(0,(rows*cols)-levelScore)} | Total Score: ${totalScore}`;
+    }
+
+    function changeMode() {
+      mode = document.getElementById('mode').value;
+      level = 1; totalScore = 0;
+      setupLevel();
+    }
+
+    // Undo implementation (stores a history of moves)
+    let history = [];
+    function saveState() {
+      history.push({
+        grid: grid.map(row => row.slice()),
+        levelScore: levelScore
+      });
+      if (history.length > 200) history.shift(); // prevent runaway memory usage
+    }
+    function undoMove() {
+      if (!history.length) return;
+      let prev = history.pop();
+      grid = prev.grid.map(row => row.slice());
+      levelScore = prev.levelScore;
+      render();
+      updateInfo();
+    }
+
+    // Add undo button
+    (function addUndoBtn() {
+      let btn = document.createElement('button');
+      btn.innerText = 'Undo';
+      btn.onclick = undoMove;
+      btn.style.marginLeft = '10px';
+      document.body.insertBefore(btn, document.getElementById('grid'));
+    })();
+
+    setupLevel();
+  </script>
+</body>
+</html>
