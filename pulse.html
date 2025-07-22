@@ -10,7 +10,7 @@
     .tile, .tile-bubble {
   width: 50px; height: 50px;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 50%;
+  border-radius: 20%;
   font-size: 18px;
   cursor: pointer;
   user-select: none;
@@ -18,30 +18,20 @@
   overflow: visible;
   margin: 3px;
   box-shadow: none;
-  transition: box-shadow 0.2s;
-  background: #333; /* fallback, overridden by [data-val] */
+  transition: box-shadow 0.2s, filter 0.2s;
+  background: #333;
+  will-change: transform, filter;
 }
-.tile-bubble::before {
-  content: '';
-  position: absolute;
-  left: 50%; top: 50%;
-  transform: translate(-50%, -50%);
-  width: 50px; height: 50px;
-  border-radius: 50%;
-  opacity: 0;
-  pointer-events: none;
-  z-index: 0;
-  background: radial-gradient(circle, #8cf7ff 0%, #8cf7ff22 70%, transparent 100%);
+.tile-bubble.pulse {
+  animation: popit-in 0.32s cubic-bezier(.35,1.8,.6,1.03);
 }
-.tile-bubble.pulse::before {
-  animation: pulse-glow 0.35s cubic-bezier(.4,1.3,.7,1.2);
-  opacity: 1;
+@keyframes popit-in {
+  0%   { transform: scale(1); filter: brightness(1.1); }
+  30%  { transform: scale(0.88); filter: brightness(1.2);}
+  70%  { transform: scale(1.08); filter: brightness(1.08);}
+  100% { transform: scale(1); filter: brightness(1); }
 }
-@keyframes pulse-glow {
-  0%   { opacity: 0.8; transform: translate(-50%,-50%) scale(1); }
-  60%  { opacity: 1; transform: translate(-50%,-50%) scale(1.25);}
-  100% { opacity: 0; transform: translate(-50%,-50%) scale(1.5);}
-}
+.tile-bubble::before { display: none; }
 .value-text {
   position: absolute; right: 7px; bottom: 2px; font-size: 13px; color: #fff;
   text-shadow: 1px 1px 2px #111, 0 0 2px #000;
