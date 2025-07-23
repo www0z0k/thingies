@@ -142,7 +142,30 @@
         radial-gradient(circle at 60% 30%, rgba(255,255,255,0.54) 19%, transparent 80%),
         radial-gradient(circle at 50% 50%, #0d4ebdff 48%, #061739ff 95%, #333 100%);
     }
-  </style>
+    /* --- Badge styles -------------------------------------------------- */
+  .badge {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%) scale(.9);
+    background: rgba(0,0,0,.8);
+    color: #fff;
+    padding: .5em 1.25em;
+    border-radius: 999px;
+    font-size: clamp(14px, 2.5vw, 24px);
+    line-height: 1.2;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s ease, transform .25s ease;
+    z-index: 9999;
+    white-space: nowrap;
+  }
+  .badge.visible {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+</style>
 </head>
 <body>
   <h1>Pulse Chain Puzzle</h1>
@@ -301,11 +324,16 @@
     async function clickTile(x, y) {
       if (getVal(x,y) < 1) return;
       saveState();
+
+      let affected = 0;
+      let destroyed = 0;
       const pulses = [];
       [[0,-1],[0,1],[-1,0],[1,0]].forEach(([dx,dy]) => {
         const nx = x + dx, ny = y + dy;
         if (inBounds(nx,ny) && grid[ny][nx] > 0) {
+          affected++;
           grid[ny][nx] = Math.max(0, grid[ny][nx] - 1);
+          if (grid[ny][nx] === 0) destroyed++;
           pulses.push([nx, ny]);
         }
       });
@@ -313,13 +341,28 @@
       if (pulses.length || grid[y][x] === 1) {
         grid[y][x] = Math.max(0, grid[y][x] - 1);
         centerPulse = true;
-        levelScore++;
+        
+        if (grid[y][x] === 0) {
+          destroyed++;
+          affected++;
+        }
+        const moveScore = 1 + affected * (affected - 1) + destroyed * (destroyed + 1);
+        
+        levelScore += moveScore;
         if (mode === 'zen') {
           randomFill(Math.ceil(Math.random() * 5));
         }
         pulseQueue = [...pulses, [x, y]];
         render();
-        await sleep(330);
+        if (moveScore > 25) {
+          await createBadge(`Awesome move! +${moveScore} pts`, 500, {background:'#0a0',color:'#fff'}, 'center');
+        } else if (moveScore > 16) {
+          await createBadge(`Great move! +${moveScore} pts`, 500, {background:'#0a0',color:'#fff'}, 'center');
+        } else if (moveScore > 10) {
+          await createBadge(`Nice move! +${moveScore} pts`, 500, {background:'#0a0',color:'#fff'}, 'center');
+        } else {
+          await sleep(330);
+        }
         checkWin();
       }
       updateInfo();
@@ -332,9 +375,11 @@
 
     function checkWin() {
       if (mode === 'challenge' && grid.flat().every(v => v === 0)) {
-        totalScore += Math.max(0, (rows * cols) - levelScore);
+        // const lvlScore = Math.max(0, (rows * cols) - levelScore);
+        totalScore += levelScore;
+        // show non-blocking badge (comment out if not wanted)
+        createBadge(`Level ${level} cleared! +${levelScore} pts`, 800, {background:'#0a0',color:'#fff'}, 'center');
         setTimeout(() => {
-          alert(`Level ${level} cleared!\nLevel Score: ${Math.max(0, (rows*cols) - levelScore)}\nTotal Score: ${totalScore}`);
           level++;
           setupLevel();
         }, 300);
@@ -345,7 +390,7 @@
 
     function updateInfo(){
       document.getElementById('info').innerText =
-        `Mode: ${mode.charAt(0).toUpperCase() + mode.slice(1)} | Level: ${level} | Score: ${Math.max(0,(rows*cols)-levelScore)} | Total Score: ${totalScore}`;
+        `Mode: ${mode.charAt(0).toUpperCase() + mode.slice(1)} | Level: ${level} | Score: ${levelScore} | Total Score: ${totalScore}`;
     }
 
     function changeMode(){
@@ -380,6 +425,62 @@
       btn.style.marginLeft = '10px';
       document.body.insertBefore(btn, document.getElementById('grid'));
     })();
+
+    /* --------------------------------------------------
+     * Badges / Toasts
+     * createBadge(text, timeMs=1000, style={}, position='center')
+     * -------------------------------------------------- */
+    async function createBadge(text, timeMs = 1000, style = {}, position = 'center'){
+      const el = document.createElement('div');
+      el.className = 'badge';
+      el.textContent = text;
+
+      // reset positional props
+      el.style.top=''; el.style.bottom=''; el.style.left=''; el.style.right='';
+      el.style.transformOrigin='center';
+
+      switch(position){
+        case 'top':
+          el.style.top='15%'; el.style.left='50%'; el.style.transform='translateX(-50%) scale(.9)';
+          break;
+        case 'bottom':
+          el.style.bottom='15%'; el.style.left='50%'; el.style.transform='translateX(-50%) scale(.9)';
+          break;
+        case 'top-left':
+          el.style.top='10%'; el.style.left='10%'; el.style.transform='scale(.9)';
+          break;
+        case 'top-right':
+          el.style.top='10%'; el.style.right='10%'; el.style.transform='scale(.9)';
+          break;
+        case 'bottom-left':
+          el.style.bottom='10%'; el.style.left='10%'; el.style.transform='scale(.9)';
+          break;
+        case 'bottom-right':
+          el.style.bottom='10%'; el.style.right='10%'; el.style.transform='scale(.9)';
+          break;
+        case 'center':
+        default:
+          el.style.top='40%'; el.style.left='50%'; el.style.transform='translate(-50%, -60%) scale(.9)';
+      }
+
+      // custom style overrides
+      if (typeof style === 'string') {
+        el.style.cssText += ';' + style;
+      } else if (style && typeof style === 'object') {
+        Object.assign(el.style, style);
+      }
+
+      document.body.appendChild(el);
+      requestAnimationFrame(()=>{ el.classList.add('visible'); });
+
+      setTimeout(()=>{
+        el.classList.remove('visible');
+        el.addEventListener('transitionend',()=>el.remove(),{once:true});
+      }, Math.max(0, timeMs));
+      await sleep(Math.max(0, timeMs));
+      return el;
+    }
+    window.createBadge = createBadge;
 
     /* --------------------------------------------------
      * Event listeners
