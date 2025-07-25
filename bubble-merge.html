@@ -49,8 +49,13 @@ let dragging = null;
 let offsetX = 0;
 let offsetY = 0;
 
+const getBaseRadiusBasedOnScreenSize = () => {
+  const baseRadius = Math.min(W, H) / 20; // Adjust this value to change bubble size
+  return baseRadius;
+};
+
 function spawnBubble(x, y, value = 2) {
-  let radius = 20 + Math.log2(value) * 5;
+  let radius = getBaseRadiusBasedOnScreenSize() + Math.log2(value) * 5;
   bubbles.push({ x, y, vx: 0, vy: 0, radius, value, merged: false });
 }
 
@@ -96,7 +101,7 @@ function mergeBubbles(b1, b2) {
   ++mergesPerMove;
   score += b1.value * Math.max(1, mergesPerMove / 2);
   setScore(score);
-  b1.radius = 20 + Math.log2(b1.value) * 5;
+  b1.radius = getBaseRadiusBasedOnScreenSize() + Math.log2(b1.value) * 5;
   b1.vx = (b1.vx + b2.vx) / 2;
   b1.vy = (b1.vy + b2.vy) / 2;
   b2.merged = true;
