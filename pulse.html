@@ -337,6 +337,17 @@
         totalScore += levelScore;
         createBadge(`Level ${level} cleared! +${levelScore} pts`, 800, {background:'#0a0',color:'#fff'});
         setTimeout(() => { level++; setupLevel(); }, 300);
+      } else if (mode === 'zen') {
+        const allEmpty = grid.flat().every(v => v === 0);
+        if (allEmpty) {
+          createBadge(`Zen achieved! Total score: ${totalScore}`, 800, {background:'#0a0',color:'#fff'});
+          setTimeout(() => { level = 1; totalScore = 0; setupLevel(); }, 300);
+        } else {
+          const rnd = Math.floor(Math.random() * 5);
+          for (let i = 0; i < rnd; i++) {
+            reverseClick();
+          }
+        }
       }
     }
     function resetGame() { restoreInitial(); }
