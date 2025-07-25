@@ -6,14 +6,15 @@
   <title>Pulse Chain Puzzle — Responsive</title>
   <style>
     :root {
-      /* JS updates these at runtime */
-      --tile-size: 50px;          /* fallback */
+      --tile-size: 50px;          /* fallback, will be updated from JS for adaptivity */
       --tile-font: 18px;          /* fallback */
       --tile-value-font: 13px;    /* fallback */
       --tile-radius: 40%;
-      --grid-gap: 5px;            /* keep in sync w/ #grid gap */
+      --grid-gap: 5px;
+      --fancy: linear-gradient(90deg, #48e0d1 0%, #4686ff 100%);
+      --fancy2: linear-gradient(90deg, #a0ffd3 0%, #38b0ff 100%);
+      --btn-radius: 999px;
     }
-
     body {
       background: #111;
       color: #eee;
@@ -22,119 +23,169 @@
       margin: 0;
       padding: 20px;
     }
-
     h1 { margin-bottom: 10px; }
-
+    .controls-row {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .fancy-btn, .fancy-select {
+      border: none;
+      outline: none;
+      font-size: 17px;
+      padding: 8px 22px;
+      margin: 0;
+      background: var(--fancy);
+      color: #fff;
+      border-radius: var(--btn-radius);
+      box-shadow: 0 2px 14px #1a89ef28;
+      transition: background 0.19s, transform 0.12s, box-shadow 0.19s;
+      cursor: pointer;
+      font-weight: 600;
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .fancy-btn:active, .fancy-select:active {
+      background: var(--fancy2);
+      transform: scale(0.96);
+    }
+    .fancy-btn[disabled], .fancy-select[disabled] {
+      opacity: 0.55;
+      filter: grayscale(0.7);
+      cursor: not-allowed;
+    }
+    .counter {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 17px;
+      font-weight: 700;
+      margin: 0 2px;
+      background: #263245d5;
+      border-radius: 12px;
+      padding: 4px 12px;
+      box-shadow: 0 1px 4px #0002;
+      line-height: 1.25;
+      user-select: none;
+      letter-spacing: 0.01em;
+    }
+    .counter.lives { color: #ff7575; }
+    .counter.keys  { color: #f5e542; }
+    .counter .icon { font-size: 1.16em; }
+    .badge {
+      position: fixed;
+      left: 50%; top: 15%;
+      transform: translate(-50%, 0) scale(.92);
+      background: #202c31e6;
+      color: #fff;
+      padding: .55em 1.6em;
+      border-radius: 999px;
+      font-size: clamp(15px, 2.4vw, 25px);
+      line-height: 1.25;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .23s, transform .22s;
+      z-index: 9999;
+      white-space: nowrap;
+      box-shadow: 0 6px 24px #0007;
+      border: 2px solid #51e7ff44;
+    }
+    .badge.visible {
+      opacity: 1;
+      transform: translate(-50%, 0) scale(1);
+    }
     #grid {
       display: grid;
       gap: var(--grid-gap);
       justify-content: center;
       margin: 20px auto;
-      /* width & height set inline from JS */
     }
-
-    .tile,
-    .tile-bubble {
+    .bubble {
       width: var(--tile-size);
       height: var(--tile-size);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: var(--tile-radius);
-      font-size: var(--tile-font);
-      cursor: pointer;
-      user-select: none;
+      border-radius: 40%;
+      display: flex; align-items: center; justify-content: center;
       position: relative;
-      overflow: visible;
-      margin: 0; /* grid-gap handles spacing */
-      box-shadow: none;
-      transition: box-shadow 0.2s, filter 0.2s, transform 0.2s;
-      background: #333;
-      will-change: transform, filter;
-    }
-
-    .tile-bubble.pulse,
-    .tile.pulse {
-      animation: popit-in 0.32s cubic-bezier(.35,1.8,.6,1.03);
-    }
-
-    @keyframes popit-in {
-      0%   { transform: scale(1);   filter: brightness(1.1); }
-      30%  { transform: scale(0.88); filter: brightness(1.2); }
-      70%  { transform: scale(1.08); filter: brightness(1.08); }
-      100% { transform: scale(1);   filter: brightness(1); }
-    }
-
-    .tile-bubble::before { display: none; }
-
-    .value-text {
-      position: absolute;
-      right: calc(var(--tile-size) * 0.14);
-      bottom: calc(var(--tile-size) * 0.04);
-      font-size: var(--tile-value-font);
+      font-size: 1.07em;
+      font-weight: bold;
       color: #fff;
-      text-shadow: 1px 1px 2px #111, 0 0 2px #000;
+      text-shadow: 1px 1px 3px #111, 0 0 1.5px #000;
+      box-sizing: border-box;
+      user-select: none;
+      transition: box-shadow 0.19s, background 0.17s;
+    }
+    .bubble .val {
+      position: absolute;
+      bottom: 5px; right: 7px;
+      font-size: 0.89em;
+      opacity: 0.82;
       pointer-events: none;
       user-select: none;
       z-index: 2;
+      font-weight: 400;
     }
-
-    button,
-    select {
-      margin-top: 10px;
-      padding: 8px 16px;
-      font-size: 16px;
+    .bubble.empty {
+      background: radial-gradient(circle at 60% 35%, #fff2 22%, #d3d3e209 85%, #222 120%);
+      box-shadow: 0 2px 10px #fff1 inset;
+      cursor: default !important;
+      pointer-events: none;
+      color: transparent !important;
+      transition: background 0.14s, box-shadow 0.14s;
+      border: none;
     }
-
-    #displayToggleLabel {
-      font-size: 16px;
-      margin-left: 12px;
+    .bubble.empty:hover { filter: none; }
+    .icon-btn {
+      font-size: 1.13em;
+      margin-right: 0;
+      margin-left: 0;
+      pointer-events: none;
       user-select: none;
+      display: flex; align-items: center; line-height: 1;
     }
-
-    /* --- Badge styles -------------------------------------------------- */
-  .badge {
-    position: fixed;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%) scale(.9);
-    background: rgba(0,0,0,.8);
-    color: #fff;
-    padding: .5em 1.25em;
-    border-radius: 999px;
-    font-size: clamp(14px, 2.5vw, 24px);
-    line-height: 1.2;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity .25s ease, transform .25s ease;
-    z-index: 9999;
-    white-space: nowrap;
-  }
-  .badge.visible {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-  }
-
-</style>
+  </style>
 </head>
 <body>
   <h1>Pulse Chain Puzzle</h1>
   <div id="info"></div>
-  <select id="mode" onchange="changeMode()">
+<div class="controls-row">
+  <select id="mode" class="fancy-select" onchange="changeMode()">
     <option value="challenge">Challenge Mode</option>
     <option value="zen">Zen Mode</option>
   </select>
-  <label id="displayToggleLabel">
-    <input type="checkbox" id="displayToggle" checked onchange="render()" />
-    Bubble CSS View
-  </label>
-  <div id="grid"></div>
-  <button onclick="resetGame()">Restart Level</button>
+  <button id="restartBtn" class="fancy-btn" onclick="restartWithLife()">
+    <span class="icon-btn" aria-label="Restart" style="margin-right:2px;">
+      <!-- Recycle SVG -->
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+     xmlns="http://www.w3.org/2000/svg">
+        <path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 8 8h-2
+           a6 6 0 1 1-6-6c1.61 0 3.09.63 4.24 1.76L13 11h7V4l-2.35 2.35z"
+        fill="currentColor"/>
+      </svg>
+    </span>
+    <span class="counter lives" id="livesCounter"><span class="icon">❤️</span><span id="livesVal">5</span></span>
+  </button>
+  <button id="undoBtn" class="fancy-btn" onclick="undoWithKey()">
+    <span class="icon-btn" aria-label="Undo" style="margin-right:2px;">
+      <!-- Undo SVG -->
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" style="vertical-align:middle;" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4.5 10L10 4.5M4.5 10L10 15.5M4.5 10H17" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </span>
+    
+    <span class="counter keys" id="keysCounter"><span class="icon">🔑</span><span id="keysVal">5</span></span>
+  </button>
+</div>
 
+  <div id="grid"></div>
   <script>
+    // ----- Color interpolation (spectral)
     function lerp(a, b, t) { return a + (b - a) * t; }
     function lerpColorRGB(stops, val) {
-      // stops: [ [value, [r,g,b]], ... ] in increasing value order
       for (let i = 0; i < stops.length - 1; ++i) {
         const [v0, c0] = stops[i], [v1, c1] = stops[i+1];
         if (val >= v0 && val <= v1) {
@@ -146,22 +197,20 @@
           ];
         }
       }
-      // Clamp to last
       return stops[stops.length-1][1];
     }
     function getBubbleStyle(val) {
-      // Spectral stops: Red -> Yellow -> Green -> Cyan -> Blue -> Purple
       const colorStops = [
-        [1,   [255,0,0]],
+        [1,   [44,180,44]],
         [20,  [255,255,0]],
-        [40,  [0,255,0]],
+        [40,  [255,180,0]],
         [60,  [0,255,255]],
         [80,  [0,0,255]],
         [100, [192,0,255]]
       ];
       const capped = Math.min(val, 100);
       const [r,g,b] = lerpColorRGB(colorStops, capped);
-      const light = 76 - capped * 0.44;    // 76..32, controls "bubble" shade
+      const light = 76 - capped * 0.44;
       const gradEnd = 66 - capped * 0.5;
       const highlightAlpha = 0.32 - capped * 0.0012;
       return `
@@ -171,156 +220,94 @@
         box-shadow: 0 0 1.4px 0 rgba(${r},${g},${b},0.12);
       `;
     }
-    /* --------------------------------------------------
-     * Globals
-     * -------------------------------------------------- */
+
+    // ---- Game variables
+    let lives = 5, keys = 5;
     let grid, container, rows, cols, level = 1, totalScore = 0, levelScore = 0, mode = 'challenge';
     let initialGrid, initialScore;
-    let displayMode = 'classic'; // or 'bubble'
-    let pulseQueue = [];
-    let history = [];
+    let pulseQueue = [], history = [];
 
-    /* Cached gap (keep in sync w/ CSS --grid-gap) */
-    const GRID_GAP = 5; // px
-
-    /* --------------------------------------------------
-     * Responsive sizing
-     * Grid should be ~80% of the lesser viewport dimension.
-     * We fit BOTH width & height: choose the largest tile size that fits.
-     * -------------------------------------------------- */
-    function resizeGrid() {
+    // ---- Responsive grid
+    function updateGridColumns() {
       if (!container) return;
-      const lesser = Math.min(window.innerWidth, window.innerHeight);
-      const target = lesser * 0.7; // desired max px for the whole grid (square box)
-
-      // available size minus total gaps
-      const availW = target - GRID_GAP * (cols - 1);
-      const availH = target - GRID_GAP * (rows - 1);
-
-      // tile size limited by both width & height
-      const tileSize = Math.floor(Math.min(availW / cols, availH / rows));
-
-      // derive font sizes relative to tile
-      const tileFont = Math.max(12, Math.floor(tileSize * 0.36));
-      const tileValueFont = Math.max(10, Math.floor(tileSize * 0.26));
-
-      // set CSS vars
-      document.documentElement.style.setProperty('--tile-size', tileSize + 'px');
-      document.documentElement.style.setProperty('--tile-font', tileFont + 'px');
-      document.documentElement.style.setProperty('--tile-value-font', tileValueFont + 'px');
-
-      // container pixel size
-      const gridW = tileSize * cols + GRID_GAP * (cols - 1);
-      const gridH = tileSize * rows + GRID_GAP * (rows - 1);
-      container.style.width = gridW + 'px';
-      container.style.height = gridH + 'px';
-
-      // update gridTemplateColumns to match tile count (auto size)
-      container.style.gridTemplateColumns = `repeat(${cols}, ${tileSize}px)`;
+      const tileSize = getComputedStyle(document.documentElement).getPropertyValue('--tile-size').trim() || '50px';
+      container.style.gridTemplateColumns = `repeat(${cols}, ${tileSize})`;
     }
 
-    /* --------------------------------------------------
-     * Level setup & state mgmt
-     * -------------------------------------------------- */
     function setupLevel() {
       rows = cols = (mode === 'challenge' ? Math.min(4 + Math.floor(level / 3), 8) : 6);
       grid = Array.from({ length: rows }, () => Array(cols).fill(0));
       container = document.getElementById('grid');
-
-      if (mode === 'challenge') {
-        for (let i = 0; i < level + 3; i++) reverseClick();
-      } else {
-        randomFill(10);
-      }
-
+      for (let i = 0; i < (mode === 'challenge' ? level + 3 : 10); i++)
+        reverseClick();
       levelScore = 0;
       saveInitial();
-      resizeGrid();
+      updateGridSize();
       render();
       updateInfo();
+      updateCounters();
     }
+
+    // Responsive grid sizing for any screen
+    function updateGridSize() {
+      if (!container) return;
+      const lesser = Math.min(window.innerWidth, window.innerHeight);
+      const target = lesser * 0.7;
+      const availW = target - 5 * (cols - 1);
+      const availH = target - 5 * (rows - 1);
+      const tileSize = Math.floor(Math.min(availW / cols, availH / rows));
+      document.documentElement.style.setProperty('--tile-size', tileSize + 'px');
+      document.documentElement.style.setProperty('--tile-font', Math.max(12, Math.floor(tileSize * 0.36)) + 'px');
+      document.documentElement.style.setProperty('--tile-value-font', Math.max(10, Math.floor(tileSize * 0.26)) + 'px');
+      updateGridColumns();
+    }
+
+    window.addEventListener('resize', updateGridSize);
 
     function saveInitial() {
       initialGrid = grid.map(row => row.slice());
       initialScore = levelScore;
     }
-
     function restoreInitial() {
       grid = initialGrid.map(row => row.slice());
       levelScore = initialScore;
-      resizeGrid();
+      updateGridSize();
       render();
       updateInfo();
+      updateCounters();
     }
-
-    /* --------------------------------------------------
-     * Rendering
-     * -------------------------------------------------- */
     function render() {
-      displayMode = document.getElementById('displayToggle').checked ? 'bubble' : 'classic';
       container.innerHTML = '';
-      grid.forEach((r, y) => r.forEach((val, x) => {
-        const isBubble = (displayMode === 'bubble');
-        const tile = document.createElement('div');
-        tile.className = 'tile'//isBubble ? 'tile-bubble' : 'tile';
-        tile.style.cssText = val > 0 && isBubble ? getBubbleStyle(val) : '';
-        tile.dataset.x = x;
-        tile.dataset.y = y;
-        // tile.dataset.val = val;
-        tile.onclick = () => clickTile(x, y);
-
-        if (shouldPulse(x, y)) {
-          tile.classList.add('pulse');
-          setTimeout(() => tile.classList.remove('pulse'), 330);
-        }
-
-        if (isBubble) {
-          if (val > 0) {
-            const valText = document.createElement('div');
-            valText.className = 'value-text';
-            valText.textContent = val;
-            tile.appendChild(valText);
-          }
-        } else {
-          tile.textContent = val || '';
-        }
-
-        container.appendChild(tile);
-      }));
+      updateGridColumns();
+      for (let y=0; y<grid.length; ++y) for (let x=0; x<grid[0].length; ++x) {
+        const val = grid[y][x];
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble' + (val === 0 ? ' empty' : '');
+        bubble.style = (val>0) ? getBubbleStyle(val) : '';
+        bubble.onclick = val > 0 ? (() => clickTile(x, y)) : null;
+        if (val > 0) bubble.innerHTML = `<span class="val">${val}</span>`;
+        container.appendChild(bubble);
+      }
       pulseQueue = [];
+      updateCounters();
     }
-
-    /* --------------------------------------------------
-     * Gameplay helpers
-     * -------------------------------------------------- */
     function reverseClick() {
       const x = Math.floor(Math.random() * cols), y = Math.floor(Math.random() * rows);
       grid[y][x]++;
       [[0,-1],[0,1],[-1,0],[1,0]].forEach(([dx,dy]) => {
         const nx = x + dx, ny = y + dy;
-        if (inBounds(nx,ny)) grid[ny][nx]++;
+        if (nx>=0 && ny>=0 && nx<cols && ny<rows) grid[ny][nx]++;
       });
     }
-
-    function randomFill(count) {
-      for (let i = 0; i < count; i++) {
-        const x = Math.floor(Math.random() * cols), y = Math.floor(Math.random() * rows);
-        grid[y][x] = Math.min(grid[y][x] + 1, 9);
-      }
-    }
-
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-
     async function clickTile(x, y) {
-      if (getVal(x,y) < 1) return;
+      if (grid[y][x] < 1) return;
       saveState();
-
-      let affected = 0;
-      let destroyed = 0;
+      let affected = 0, destroyed = 0;
       const pulses = [];
       [[0,-1],[0,1],[-1,0],[1,0]].forEach(([dx,dy]) => {
         const nx = x + dx, ny = y + dy;
-        if (inBounds(nx,ny) && grid[ny][nx] > 0) {
+        if (nx>=0 && ny>=0 && nx<cols && ny<rows && grid[ny][nx]>0) {
           affected++;
           grid[ny][nx] = Math.max(0, grid[ny][nx] - 1);
           if (grid[ny][nx] === 0) destroyed++;
@@ -331,138 +318,91 @@
       if (pulses.length || grid[y][x] === 1) {
         grid[y][x] = Math.max(0, grid[y][x] - 1);
         centerPulse = true;
-        
-        if (grid[y][x] === 0) {
-          destroyed++;
-          affected++;
-        }
+        if (grid[y][x] === 0) { destroyed++; affected++; }
         const moveScore = 1 + affected * (affected - 1) + destroyed * (destroyed + 1);
-        
         levelScore += moveScore;
-        if (mode === 'zen') {
-          randomFill(Math.ceil(Math.random() * 5));
-        }
         pulseQueue = [...pulses, [x, y]];
         render();
-        if (moveScore > 25) {
-          await createBadge(`Awesome move! +${moveScore} pts`, 500, {background:'#0a0',color:'#fff'}, 'center');
-        } else if (moveScore > 16) {
-          await createBadge(`Great move! +${moveScore} pts`, 500, {background:'#0a0',color:'#fff'}, 'center');
-        } else if (moveScore > 10) {
-          await createBadge(`Nice move! +${moveScore} pts`, 500, {background:'#0a0',color:'#fff'}, 'center');
-        } else {
-          await sleep(330);
-        }
+        if (moveScore > 25)      await createBadge(`Awesome move! +${moveScore} pts`, 500, {background:'#0a0',color:'#fff'});
+        else if (moveScore > 16) await createBadge(`Great move! +${moveScore} pts`, 500, {background:'#0a0',color:'#fff'});
+        else if (moveScore > 10) await createBadge(`Nice move! +${moveScore} pts`, 500, {background:'#0a0',color:'#fff'});
+        else await sleep(330);
         checkWin();
       }
       updateInfo();
+      updateCounters();
     }
-
-    function getVal(x,y){ return inBounds(x,y) ? grid[y][x] : 0; }
-    function inBounds(x,y){ return x>=0 && y>=0 && x<cols && y<rows; }
-
-    function shouldPulse(x,y){ return pulseQueue.some(([px,py]) => px===x && py===y); }
-
     function checkWin() {
       if (mode === 'challenge' && grid.flat().every(v => v === 0)) {
-        // const lvlScore = Math.max(0, (rows * cols) - levelScore);
         totalScore += levelScore;
-        // show non-blocking badge (comment out if not wanted)
-        createBadge(`Level ${level} cleared! +${levelScore} pts`, 800, {background:'#0a0',color:'#fff'}, 'center');
-        setTimeout(() => {
-          level++;
-          setupLevel();
-        }, 300);
+        createBadge(`Level ${level} cleared! +${levelScore} pts`, 800, {background:'#0a0',color:'#fff'});
+        setTimeout(() => { level++; setupLevel(); }, 300);
       }
     }
-
-    function resetGame(){ restoreInitial(); }
-
-    function updateInfo(){
+    function resetGame() { restoreInitial(); }
+    function updateInfo() {
       document.getElementById('info').innerText =
         `Mode: ${mode.charAt(0).toUpperCase() + mode.slice(1)} | Level: ${level} | Score: ${levelScore} | Total Score: ${totalScore}`;
     }
-
-    function changeMode(){
+    function changeMode() {
       mode = document.getElementById('mode').value;
       level = 1; totalScore = 0;
+      lives = 5; keys = 5;
       setupLevel();
     }
-
-    /* --------------------------------------------------
-     * Undo support
-     * -------------------------------------------------- */
-    function saveState(){
+    function updateCounters() {
+      document.getElementById('livesVal').textContent = lives;
+      document.getElementById('keysVal').textContent  = keys;
+      document.getElementById('restartBtn').disabled = (lives < 1);
+      document.getElementById('undoBtn').disabled    = (keys  < 1 || !history.length);
+    }
+    function saveState() {
       history.push({
         grid: grid.map(r => r.slice()),
-        levelScore: levelScore
+        levelScore: levelScore,
+        level: level,
       });
       if (history.length > 200) history.shift();
+      updateCounters();
     }
-    function undoMove(){
+    function undoWithKey() {
+      if (keys < 1) {
+        createBadge('No keys left!', 1000, {background:'#fc0',color:'#222'});
+        return;
+      }
+      if (!history.length || history[history.length - 1].level !== level) {
+        createBadge('Nothing to undo!', 1000, {background:'#fc0',color:'#222'});
+        return;
+      }
+      keys--;
+      undoMove();
+      updateCounters();
+    }
+    function restartWithLife() {
+      if (lives < 1 || !history.length || history[history.length - 1].level !== level) {
+        createBadge('No lives left!', 1200, {background:'#f33',color:'#fff'});
+        return;
+      }
+      lives--;
+      resetGame();
+      updateCounters();
+    }
+    function undoMove() {
       if (!history.length) return;
       const prev = history.pop();
       grid = prev.grid.map(r => r.slice());
       levelScore = prev.levelScore;
       render();
       updateInfo();
+      updateCounters();
     }
-
-    (function addUndoBtn(){
-      const btn = document.createElement('button');
-      btn.innerText = 'Undo';
-      btn.onclick = undoMove;
-      btn.style.marginLeft = '10px';
-      document.body.insertBefore(btn, document.getElementById('grid'));
-    })();
-
-    /* --------------------------------------------------
-     * Badges / Toasts
-     * createBadge(text, timeMs=1000, style={}, position='center')
-     * -------------------------------------------------- */
+    // Badge/Toast
     async function createBadge(text, timeMs = 1000, style = {}, position = 'center'){
       const el = document.createElement('div');
       el.className = 'badge';
       el.textContent = text;
-
-      // reset positional props
-      el.style.top=''; el.style.bottom=''; el.style.left=''; el.style.right='';
-      el.style.transformOrigin='center';
-
-      switch(position){
-        case 'top':
-          el.style.top='15%'; el.style.left='50%'; el.style.transform='translateX(-50%) scale(.9)';
-          break;
-        case 'bottom':
-          el.style.bottom='15%'; el.style.left='50%'; el.style.transform='translateX(-50%) scale(.9)';
-          break;
-        case 'top-left':
-          el.style.top='10%'; el.style.left='10%'; el.style.transform='scale(.9)';
-          break;
-        case 'top-right':
-          el.style.top='10%'; el.style.right='10%'; el.style.transform='scale(.9)';
-          break;
-        case 'bottom-left':
-          el.style.bottom='10%'; el.style.left='10%'; el.style.transform='scale(.9)';
-          break;
-        case 'bottom-right':
-          el.style.bottom='10%'; el.style.right='10%'; el.style.transform='scale(.9)';
-          break;
-        case 'center':
-        default:
-          el.style.top='40%'; el.style.left='50%'; el.style.transform='translate(-50%, -60%) scale(.9)';
-      }
-
-      // custom style overrides
-      if (typeof style === 'string') {
-        el.style.cssText += ';' + style;
-      } else if (style && typeof style === 'object') {
-        Object.assign(el.style, style);
-      }
-
       document.body.appendChild(el);
       requestAnimationFrame(()=>{ el.classList.add('visible'); });
-
       setTimeout(()=>{
         el.classList.remove('visible');
         el.addEventListener('transitionend',()=>el.remove(),{once:true});
@@ -470,17 +410,8 @@
       await sleep(Math.max(0, timeMs));
       return el;
     }
-    window.createBadge = createBadge;
-
-    /* --------------------------------------------------
-     * Event listeners
-     * -------------------------------------------------- */
-    window.addEventListener('resize', () => {
-      resizeGrid();
-    });
-
-    // Initial boot
-    setupLevel();
+    // -- Start the game
+    window.addEventListener('DOMContentLoaded', setupLevel);
   </script>
 </body>
 </html>
