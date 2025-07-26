@@ -55,7 +55,8 @@ const getBaseRadiusBasedOnScreenSize = () => {
 };
 
 function spawnBubble(x, y, value = 2) {
-  let radius = getBaseRadiusBasedOnScreenSize() + Math.log2(value) * 5;
+  const br = getBaseRadiusBasedOnScreenSize();
+  let radius = br + Math.log2(value) * (br / 3);
   bubbles.push({ x, y, vx: 0, vy: 0, radius, value, merged: false });
 }
 
@@ -101,7 +102,8 @@ function mergeBubbles(b1, b2) {
   ++mergesPerMove;
   score += b1.value * Math.max(1, mergesPerMove / 2);
   setScore(score);
-  b1.radius = getBaseRadiusBasedOnScreenSize() + Math.log2(b1.value) * 5;
+  const br = getBaseRadiusBasedOnScreenSize();
+  b1.radius = br + Math.log2(b1.value) * (br / 3);
   b1.vx = (b1.vx + b2.vx) / 2;
   b1.vy = (b1.vy + b2.vy) / 2;
   b2.merged = true;
