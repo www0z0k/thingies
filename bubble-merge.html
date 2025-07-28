@@ -118,6 +118,25 @@
       box-shadow: 0 2px 10px rgba(70, 130, 180, 0.3);
     }
     
+    /* Скрытая кнопка отладки для разработчиков */
+    #debugButton {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 30px;
+      height: 30px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 50%;
+      display: none;
+      z-index: 15;
+      cursor: pointer;
+      font-size: 12px;
+      color: rgba(255,255,255,0.5);
+      text-align: center;
+      line-height: 28px;
+    }
+    
     /* Дополнительные стили для очень маленьких экранов */
     @media (max-height: 500px) {
       #gameOver {
@@ -189,6 +208,7 @@
 <body>
 <canvas id="canvas"></canvas>
 <div id="hud">Fusion Bubble Merge</div>
+<div id="debugButton" onclick="showDebugInfo()">🔧</div>
 <div id="gameOver">
   <h2>Игра окончена!</h2>
   <p>Экран заполнен пузырями</p>
@@ -338,7 +358,6 @@ function constrainBubblesToScreen() {
 function spawnInitialBubbles() {
   // Сохраняем существующий прогресс если есть
   if (bubbles.length > 0) {
-    console.log("Игра уже идет, не перезапускаем начальные пузыри");
     return; // Не перезапускаем если игра уже идет
   }
   
@@ -354,8 +373,6 @@ function spawnInitialBubbles() {
     numBubbles = Math.floor(Math.random() * 6) + 4; // 4-9 пузырей на десктопе
   }
   
-  console.log(`Создаем ${numBubbles} начальных пузырей`);
-  
   for (let i = 0; i < numBubbles; i++) {
     // Как в 2048: 90% на "2", 10% на "4"
     let val = Math.random() < 0.9 ? 2 : 4;
@@ -370,7 +387,6 @@ function spawnInitialBubbles() {
     let x = Math.random() * (W - marginX * 2) + marginX;
     let y = Math.random() * (H - marginY * 2) + marginY;
     spawnBubble(x, y, val);
-    console.log(`Начальный пузырь ${val} создан в позиции (${Math.round(x)}, ${Math.round(y)})`);
   }
   setScore(score);
 }
@@ -485,7 +501,6 @@ function checkGameOver() {
     gameOver = true;
     document.getElementById('finalScore').textContent = `Финальный счет: ${score}`;
     document.getElementById('gameOver').style.display = 'block';
-    console.log(`Игра окончена! Активных пузырей: ${activeBubbles}/${MAX_BUBBLES}`);
     return true;
   }
   return false;
@@ -498,7 +513,6 @@ function restartGame() {
   dragging = null;
   pushStart = null;
   document.getElementById('gameOver').style.display = 'none';
-  console.log("Перезапуск игры - спавним начальные пузыри");
   spawnInitialBubbles();
 }
 
@@ -841,7 +855,6 @@ function startDrag(e) {
   if (closestBubble) {
     dragging = closestBubble;
     pushStart = { x: closestBubble.x, y: closestBubble.y }; // Центр выбранного пузыря
-    console.log(`Выбран пузырь со значением ${dragging.value} в позиции (${Math.round(dragging.x)}, ${Math.round(dragging.y)})`);
   }
 }
 
@@ -855,8 +868,6 @@ function moveDrag(e) {
     // Более отзывчивое натяжение - меньший делитель = более чувствительно
     const stretchDistance = distance(pushStart, { x, y });
     pushForce = Math.min(stretchDistance / 15, 10); // Увеличили чувствительность и максимальную силу
-    
-    console.log(`Натяжение: ${Math.round(stretchDistance)}px, Сила: ${pushForce.toFixed(2)}`);
   }
 }
 
@@ -866,9 +877,7 @@ function endDrag() {
   if (dragging && pushStart) {
     actionPerformed = true; // Действие считается выполненным при любом натяжении
     
-    if (pushForce > 0.3) { // Если достаточная сила - толкаем пузырь
-      console.log(`Запуск пузыря ${dragging.value} с силой ${pushForce.toFixed(2)}`);
-      
+    if (pushForce > 0.3) { // Если достаточная сила - толкаем пузырь      
       // Нормализуем направление
       const directionLength = distance({ x: 0, y: 0 }, pushDirection);
       if (directionLength > 0) {
@@ -880,18 +889,12 @@ function endDrag() {
         const forceMultiplier = (baseForce * pushForce) / dragging.weight;
         dragging.vx = normalizedX * forceMultiplier;
         dragging.vy = normalizedY * forceMultiplier;
-        
-        console.log(`Установлена скорость: vx=${dragging.vx.toFixed(2)}, vy=${dragging.vy.toFixed(2)}`);
       }
-    } else {
-      console.log("Слабое натяжение - пузырь не запущен, но действие засчитано");
     }
   }
   
   // СПАВН ПУЗЫРЕЙ ПРИ ЛЮБОМ ДЕЙСТВИИ (как в 2048)
   if (actionPerformed) {
-    console.log("Выполнено действие - спавним новые пузыри");
-    
     // Проверяем, есть ли место для новых пузырей
     const activeBubbles = bubbles.filter(b => !b.merged).length;
     
@@ -927,17 +930,10 @@ function endDrag() {
           const value = Math.random() < 0.9 ? 2 : 4;
           spawnBubble(x, y, value);
           spawned++;
-          console.log(`Заспавнен пузырь ${value} в позиции (${Math.round(x)}, ${Math.round(y)})`);
         }
         
         attempts++;
       }
-      
-      if (spawned === 0) {
-        console.log("Не удалось найти место для новых пузырей");
-      }
-    } else {
-      console.log("Недостаточно места для новых пузырей");
     }
   }
   
@@ -1034,23 +1030,56 @@ if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', handleResize);
 }
 
-// Добавляем обработчик клавиши R для перезапуска и D для отладки
-window.addEventListener('keydown', (e) => {
-  if (e.key === 'r' || e.key === 'R') {
-    restartGame();
-  } else if (e.key === 'd' || e.key === 'D') {
-    // Отладочная информация
-    const activeBubbles = bubbles.filter(b => !b.merged);
-    console.log("=== ОТЛАДКА ИГРЫ ===");
-    console.log(`Всего пузырей: ${bubbles.length}`);
-    console.log(`Активных пузырей: ${activeBubbles.length}`);
-    console.log(`Лимит пузырей: ${MAX_BUBBLES}`);
-    console.log(`Счет: ${score}`);
-    console.log(`FPS: ${fpsCounter}`);
-    console.log("Активные пузыри:", activeBubbles.map(b => `${b.value}(${Math.round(b.x)},${Math.round(b.y)})`));
-    console.log("==================");
+// Мобильная игра - только сенсорное управление и мышь
+// Скрытая отладка активируется тройным тапом в правом верхнем углу
+
+let debugTapCount = 0;
+let debugTapTimer = null;
+
+// Функция для показа отладочной информации
+function showDebugInfo() {
+  const activeBubbles = bubbles.filter(b => !b.merged);
+  console.log("=== ОТЛАДКА ИГРЫ ===");
+  console.log(`Всего пузырей: ${bubbles.length}`);
+  console.log(`Активных пузырей: ${activeBubbles.length}`);
+  console.log(`Лимит пузырей: ${MAX_BUBBLES}`);
+  console.log(`Счет: ${score}`);
+  console.log(`FPS: ${fpsCounter}`);
+  console.log("Активные пузыри:", activeBubbles.map(b => `${b.value}(${Math.round(b.x)},${Math.round(b.y)})`));
+  console.log("==================");
+  
+  // Показываем алерт только для разработчиков
+  alert(`Debug Info:\nПузырей: ${activeBubbles.length}/${MAX_BUBBLES}\nСчет: ${score}\nFPS: ${fpsCounter}`);
+}
+
+// Обработчик тройного тапа для активации отладки
+canvas.addEventListener('touchstart', (e) => {
+  const touch = e.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  const x = touch.clientX - rect.left;
+  const y = touch.clientY - rect.top;
+  
+  // Проверяем тап в правом верхнем углу (для активации отладки)
+  if (x > W - 60 && y < 60) {
+    debugTapCount++;
+    
+    if (debugTapTimer) {
+      clearTimeout(debugTapTimer);
+    }
+    
+    debugTapTimer = setTimeout(() => {
+      debugTapCount = 0;
+    }, 1000); // Сброс через 1 секунду
+    
+    if (debugTapCount >= 3) {
+      document.getElementById('debugButton').style.display = 'block';
+      debugTapCount = 0;
+      if (debugTapTimer) {
+        clearTimeout(debugTapTimer);
+      }
+    }
   }
-});
+}, { passive: true });
 
 setScore(0);
 spawnInitialBubbles();
