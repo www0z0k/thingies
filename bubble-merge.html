@@ -211,8 +211,8 @@ const MIN_VELOCITY = isMobile ? 0.15 : 0.1; // Чуть выше порог ос
 
 const setScore = (val) => {
   const text = isMobile 
-    ? `Score: ${val}<br>Bubbles: ${bubbles.length}/${MAX_BUBBLES}`
-    : `Fusion Bubble Merge | Score: ${val} | Bubbles: ${bubbles.length}/${MAX_BUBBLES}`;
+    ? `Score: ${val}<br>Bubbles: ${bubbles.length}/${MAX_BUBBLES}<br>FPS: ${fpsCounter}`
+    : `Fusion Bubble Merge | Score: ${val} | Bubbles: ${bubbles.length}/${MAX_BUBBLES} | FPS: ${fpsCounter}`;
   document.getElementById('hud').innerHTML = text;
 };
 
@@ -367,39 +367,56 @@ function spawnInitialBubbles() {
   setScore(score);
 }
 
+// Кэшируем градиенты для лучшей производительности
+const gradientCache = new Map();
+
 function drawBubble(b) {
+  // Основной круг пузыря
   ctx.beginPath();
   ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
   ctx.fillStyle = colors[b.value] || '#fff';
   ctx.fill();
   
-  // Добавляем градиент для объемности
-  const gradient = ctx.createRadialGradient(
-    b.x - b.radius/3, b.y - b.radius/3, 0,
-    b.x, b.y, b.radius
-  );
-  gradient.addColorStop(0, 'rgba(255,255,255,0.3)');
-  gradient.addColorStop(1, 'rgba(0,0,0,0.1)');
-  ctx.fillStyle = gradient;
-  ctx.fill();
+  // Добавляем градиент только в режиме высокого качества
+  if (!lowFPSMode) {
+    const gradientKey = `${Math.round(b.radius)}-${b.value}`;
+    let gradient = gradientCache.get(gradientKey);
+    
+    if (!gradient) {
+      gradient = ctx.createRadialGradient(
+        0, 0, 0,
+        0, 0, b.radius
+      );
+      gradient.addColorStop(0, 'rgba(255,255,255,0.3)');
+      gradient.addColorStop(1, 'rgba(0,0,0,0.1)');
+      gradientCache.set(gradientKey, gradient);
+    }
+    
+    // Применяем градиент с учетом позиции
+    ctx.save();
+    ctx.translate(b.x - b.radius/3, b.y - b.radius/3);
+    ctx.beginPath();
+    ctx.arc(b.radius/3, b.radius/3, b.radius, 0, Math.PI * 2);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.restore();
+  }
   
-  // Адаптивная толщина обводки
+  // Оптимизированная обводка
   const strokeWidth = isMobile ? Math.max(1, b.radius * 0.05) : 2;
+  ctx.beginPath();
+  ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
   ctx.strokeStyle = '#000';
   ctx.lineWidth = strokeWidth;
   ctx.stroke();
   
-  // Адаптивный размер шрифта с лучшей читаемостью на мобильных
-  let fontSize;
-  if (isMobile) {
-    fontSize = Math.max(10, b.radius * 0.5); // Немного меньше на мобильных для лучшей читаемости
-  } else {
-    fontSize = Math.max(12, b.radius * 0.6);
-  }
+  // Оптимизированный текст
+  const fontSize = isMobile ? 
+    Math.max(10, b.radius * 0.5) : 
+    Math.max(12, b.radius * 0.6);
   
-  // Текст с лучшим контрастом
   ctx.fillStyle = '#000';
-  ctx.font = `bold ${fontSize}px ${isMobile ? '-apple-system, system-ui' : 'sans-serif'}`;
+  ctx.font = `bold ${fontSize}px ${isMobile ? '-apple-system' : 'sans-serif'}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(b.value, b.x, b.y);
@@ -488,50 +505,65 @@ function update() {
   if (gameOver) return;
   
   const now = Date.now();
+  const bubbleCount = bubbles.length;
   
-  for (let b of bubbles) {
+  // Оптимизированный цикл обновления позиций
+  for (let i = 0; i < bubbleCount; i++) {
+    const b = bubbles[i];
     if (b !== dragging) {
       // Применяем трение для затухания движения
       b.vx *= FRICTION;
       b.vy *= FRICTION;
       
-      // Останавливаем очень медленные движения
-      if (Math.abs(b.vx) < MIN_VELOCITY) b.vx = 0;
-      if (Math.abs(b.vy) < MIN_VELOCITY) b.vy = 0;
+      // Останавливаем очень медленные движения (оптимизация)
+      const absVx = Math.abs(b.vx);
+      const absVy = Math.abs(b.vy);
+      if (absVx < MIN_VELOCITY) b.vx = 0;
+      if (absVy < MIN_VELOCITY) b.vy = 0;
       
-      b.x += b.vx;
-      b.y += b.vy;
+      // Обновляем позицию только если есть движение
+      if (absVx > 0 || absVy > 0) {
+        b.x += b.vx;
+        b.y += b.vy;
 
-      // Строгие границы экрана - пузыри не могут выйти за пределы
-      if (b.x - b.radius <= 0) {
-        b.x = b.radius;
-        b.vx = Math.abs(b.vx) * 0.7; // Отскок в положительном направлении
-      }
-      if (b.x + b.radius >= W) {
-        b.x = W - b.radius;
-        b.vx = -Math.abs(b.vx) * 0.7; // Отскок в отрицательном направлении
-      }
-      if (b.y - b.radius <= 0) {
-        b.y = b.radius;
-        b.vy = Math.abs(b.vy) * 0.7; // Отскок вниз
-      }
-      if (b.y + b.radius >= H) {
-        b.y = H - b.radius;
-        b.vy = -Math.abs(b.vy) * 0.7; // Отскок вверх
+        // Строгие границы экрана - оптимизированная проверка
+        const radius = b.radius;
+        if (b.x <= radius) {
+          b.x = radius;
+          b.vx = absVx * 0.7; // Отскок в положительном направлении
+        } else if (b.x >= W - radius) {
+          b.x = W - radius;
+          b.vx = -absVx * 0.7; // Отскок в отрицательном направлении
+        }
+        
+        if (b.y <= radius) {
+          b.y = radius;
+          b.vy = absVy * 0.7; // Отскок вниз
+        } else if (b.y >= H - radius) {
+          b.y = H - radius;
+          b.vy = -absVy * 0.7; // Отскок вверх
+        }
       }
     }
   }
 
-  // Обработка столкновений и слияний
-  for (let i = 0; i < bubbles.length; i++) {
-    for (let j = i + 1; j < bubbles.length; j++) {
-      let b1 = bubbles[i], b2 = bubbles[j];
-      if (b1.merged || b2.merged) continue;
+  // Оптимизированная обработка столкновений и слияний
+  for (let i = 0; i < bubbleCount; i++) {
+    const b1 = bubbles[i];
+    if (b1.merged) continue;
+    
+    for (let j = i + 1; j < bubbleCount; j++) {
+      const b2 = bubbles[j];
+      if (b2.merged) continue;
       
-      let d = distance(b1, b2);
-      let minDistance = b1.radius + b2.radius;
+      // Быстрая проверка расстояния без sqrt
+      const dx = b2.x - b1.x;
+      const dy = b2.y - b1.y;
+      const distanceSquared = dx * dx + dy * dy;
+      const minDistance = b1.radius + b2.radius;
+      const minDistanceSquared = minDistance * minDistance;
       
-      if (d < minDistance) {
+      if (distanceSquared < minDistanceSquared) {
         // Проверяем возможность слияния
         if (b1.value === b2.value) {
           // Слияние происходит при контакте пузырей одинакового значения
@@ -540,18 +572,19 @@ function update() {
         }
         
         // Физика столкновения с учетом массы и веса
-        let angle = Math.atan2(b2.y - b1.y, b2.x - b1.x);
-        let overlap = minDistance - d;
+        const distance = Math.sqrt(distanceSquared);
+        const angle = Math.atan2(dy, dx);
+        const overlap = minDistance - distance;
         
         // Разделяем пузыри
-        let separationForce = overlap * 0.5;
-        let pushX = Math.cos(angle) * separationForce;
-        let pushY = Math.sin(angle) * separationForce;
+        const separationForce = overlap * 0.5;
+        const pushX = Math.cos(angle) * separationForce;
+        const pushY = Math.sin(angle) * separationForce;
         
-        // Учитываем массу при разделении
-        let totalMass = b1.mass + b2.mass;
-        let b1Factor = b2.mass / totalMass;
-        let b2Factor = b1.mass / totalMass;
+        // Учитываем массу при разделении (кэшируем вычисления)
+        const totalMass = b1.mass + b2.mass;
+        const b1Factor = b2.mass / totalMass;
+        const b2Factor = b1.mass / totalMass;
         
         b1.x -= pushX * b1Factor;
         b1.y -= pushY * b1Factor;
@@ -559,27 +592,57 @@ function update() {
         b2.y += pushY * b2Factor;
         
         // Передача импульса с учетом массы и веса
-        let impactForce = 0.1 / Math.max(b1.weight, b2.weight);
-        b1.vx -= pushX * impactForce * b1Factor;
-        b1.vy -= pushY * impactForce * b1Factor;
-        b2.vx += pushX * impactForce * b2Factor;
-        b2.vy += pushY * impactForce * b2Factor;
+        const impactForce = 0.1 / Math.max(b1.weight, b2.weight);
+        const impulseX = pushX * impactForce;
+        const impulseY = pushY * impactForce;
+        
+        b1.vx -= impulseX * b1Factor;
+        b1.vy -= impulseY * b1Factor;
+        b2.vx += impulseX * b2Factor;
+        b2.vy += impulseY * b2Factor;
       }
     }
   }
 
-  // Удаляем слившиеся пузыри
-  bubbles = bubbles.filter(b => !b.merged);
+  // Удаляем слившиеся пузыри (оптимизированно)
+  let writeIndex = 0;
+  for (let i = 0; i < bubbleCount; i++) {
+    if (!bubbles[i].merged) {
+      if (writeIndex !== i) {
+        bubbles[writeIndex] = bubbles[i];
+      }
+      writeIndex++;
+    }
+  }
+  bubbles.length = writeIndex;
+  
+  // Финальная проверка границ для всех пузырей
+  for (let i = 0; i < bubbles.length; i++) {
+    const b = bubbles[i];
+    b.x = Math.max(b.radius, Math.min(W - b.radius, b.x));
+    b.y = Math.max(b.radius, Math.min(H - b.radius, b.y));
+  }
   
   // Проверяем условие поражения
   checkGameOver();
 }
 
 function draw() {
+  // Оптимизированная очистка canvas
   ctx.clearRect(0, 0, W, H);
   
-  // Рисуем направление толчка (рогатка)
+  // Рисуем пузыри сначала (batch rendering)
+  const bubbleCount = bubbles.length;
+  for (let i = 0; i < bubbleCount; i++) {
+    if (!bubbles[i].merged) {
+      drawBubble(bubbles[i]);
+    }
+  }
+  
+  // Рисуем направление толчка (рогатка) поверх пузырей
   if (dragging && pushStart && pushForce > 0) {
+    ctx.save(); // Сохраняем состояние контекста
+    
     // Линия от пузыря к точке оттягивания
     ctx.beginPath();
     ctx.moveTo(dragging.x, dragging.y);
@@ -588,17 +651,22 @@ function draw() {
     ctx.lineWidth = 3;
     ctx.stroke();
     
-    // Стрелка показывающая направление полета
-    const arrowLength = pushForce * 20;
-    const arrowEndX = dragging.x + pushDirection.x * (arrowLength / distance({ x: 0, y: 0 }, pushDirection));
-    const arrowEndY = dragging.y + pushDirection.y * (arrowLength / distance({ x: 0, y: 0 }, pushDirection));
-    
-    ctx.beginPath();
-    ctx.moveTo(dragging.x, dragging.y);
-    ctx.lineTo(arrowEndX, arrowEndY);
-    ctx.strokeStyle = `rgba(255, 100, 100, ${0.5 + pushForce * 0.1})`;
-    ctx.lineWidth = 4;
-    ctx.stroke();
+    // Стрелка показывающая направление полета (оптимизированная)
+    const dirLength = Math.sqrt(pushDirection.x * pushDirection.x + pushDirection.y * pushDirection.y);
+    if (dirLength > 0) {
+      const arrowLength = pushForce * 20;
+      const normalizedX = pushDirection.x / dirLength;
+      const normalizedY = pushDirection.y / dirLength;
+      const arrowEndX = dragging.x + normalizedX * arrowLength;
+      const arrowEndY = dragging.y + normalizedY * arrowLength;
+      
+      ctx.beginPath();
+      ctx.moveTo(dragging.x, dragging.y);
+      ctx.lineTo(arrowEndX, arrowEndY);
+      ctx.strokeStyle = `rgba(255, 100, 100, ${0.5 + pushForce * 0.1})`;
+      ctx.lineWidth = 4;
+      ctx.stroke();
+    }
     
     // Точка оттягивания
     ctx.beginPath();
@@ -612,10 +680,8 @@ function draw() {
     ctx.strokeStyle = `rgba(255, 200, 100, ${0.4 + pushForce * 0.1})`;
     ctx.lineWidth = 2;
     ctx.stroke();
-  }
-  
-  for (let b of bubbles) {
-    drawBubble(b);
+    
+    ctx.restore(); // Восстанавливаем состояние контекста
   }
   
   // Предупреждение о близости к поражению
@@ -644,10 +710,44 @@ function draw() {
   }
 }
 
-function loop() {
-  update();
-  draw();
+// Оптимизация для стабильных 60+ FPS
+let lastTime = 0;
+let deltaTime = 0;
+const targetFPS = 60;
+const targetFrameTime = 1000 / targetFPS;
+let frameCount = 0;
+let fpsCounter = 0;
+let lastFPSTime = 0;
+let lowFPSMode = false; // Режим низкого качества для поддержания FPS
+
+function loop(currentTime) {
   if (!gameOver) {
+    // Ограничиваем частоту кадров для стабильности
+    deltaTime = currentTime - lastTime;
+    
+    if (deltaTime >= targetFrameTime) {
+      // Счетчик FPS и адаптивное качество
+      frameCount++;
+      if (currentTime - lastFPSTime >= 1000) {
+        fpsCounter = frameCount;
+        frameCount = 0;
+        lastFPSTime = currentTime;
+        
+        // Включаем режим низкого качества если FPS падает ниже 45
+        lowFPSMode = fpsCounter < 45;
+        
+        // Очищаем кэш градиентов периодически для экономии памяти
+        if (gradientCache.size > 100) {
+          gradientCache.clear();
+        }
+      }
+      
+      update();
+      draw();
+      
+      lastTime = currentTime - (deltaTime % targetFrameTime);
+    }
+    
     requestAnimationFrame(loop);
   }
 }
