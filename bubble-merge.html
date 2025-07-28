@@ -2,50 +2,187 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="format-detection" content="telephone=no">
   <title>Fusion Bubble Merge</title>
   <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    
     html, body {
-      margin: 0; padding: 0;
+      margin: 0; 
+      padding: 0;
       overflow: hidden;
       background: #111;
       color: #fff;
-      font-family: sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      height: 100vh;
+      height: 100dvh; /* Новая единица для мобильных браузеров */
+      width: 100vw;
+      position: fixed;
+      top: 0;
+      left: 0;
     }
+    
     canvas {
       display: block;
+      touch-action: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      -khtml-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
     }
+    
     #hud {
       position: absolute;
-      top: 10px;
-      left: 10px;
+      top: env(safe-area-inset-top, 10px);
+      left: env(safe-area-inset-left, 10px);
+      right: env(safe-area-inset-right, 10px);
       z-index: 10;
-      font-size: 18px;
+      font-size: clamp(12px, 3vw, 18px);
+      font-weight: 600;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+      pointer-events: none;
+      padding: 8px 12px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
     }
+    
     #gameOver {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: rgba(0,0,0,0.8);
-      padding: 20px;
-      border-radius: 10px;
+      background: rgba(0,0,0,0.9);
+      padding: clamp(15px, 5vw, 30px);
+      border-radius: clamp(8px, 2vw, 15px);
       text-align: center;
       display: none;
       z-index: 20;
+      max-width: 90vw;
+      max-height: 80vh;
+      backdrop-filter: blur(15px);
+      -webkit-backdrop-filter: blur(15px);
+      border: 2px solid rgba(255,255,255,0.1);
     }
+    
+    #gameOver h2 {
+      margin: 0 0 clamp(10px, 3vw, 20px) 0;
+      font-size: clamp(18px, 5vw, 28px);
+      font-weight: 700;
+    }
+    
+    #gameOver p {
+      margin: clamp(5px, 2vw, 10px) 0;
+      font-size: clamp(14px, 3.5vw, 18px);
+    }
+    
     #gameOver button {
-      margin-top: 10px;
-      padding: 10px 20px;
-      font-size: 16px;
+      margin-top: clamp(15px, 4vw, 25px);
+      padding: clamp(12px, 3vw, 18px) clamp(20px, 6vw, 35px);
+      font-size: clamp(14px, 4vw, 18px);
       background: #4682b4;
       color: white;
       border: none;
-      border-radius: 5px;
+      border-radius: clamp(5px, 1.5vw, 8px);
       cursor: pointer;
+      font-weight: 600;
+      min-height: 44px; /* Минимальный размер для touch target */
+      min-width: 120px;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 15px rgba(70, 130, 180, 0.3);
     }
-    #gameOver button:hover {
+    
+    #gameOver button:hover,
+    #gameOver button:focus {
       background: #5a9bd4;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(70, 130, 180, 0.4);
+    }
+    
+    #gameOver button:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 10px rgba(70, 130, 180, 0.3);
+    }
+    
+    /* Дополнительные стили для очень маленьких экранов */
+    @media (max-height: 500px) {
+      #gameOver {
+        padding: 15px;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+      
+      #gameOver h2 {
+        font-size: clamp(16px, 4vw, 22px);
+        margin-bottom: 10px;
+      }
+      
+      #gameOver p {
+        font-size: clamp(12px, 3vw, 16px);
+        margin: 5px 0;
+      }
+    }
+    
+    /* Ландшафтная ориентация на мобильных */
+    @media (orientation: landscape) and (max-height: 500px) {
+      #hud {
+        font-size: clamp(10px, 2.5vw, 16px);
+        padding: 6px 10px;
+      }
+      
+      #gameOver {
+        max-width: 60vw;
+        max-height: 85vh;
+      }
+    }
+    
+    /* Стили для планшетов */
+    @media (min-width: 768px) and (max-width: 1024px) {
+      #hud {
+        font-size: clamp(16px, 2.5vw, 20px);
+        padding: 10px 15px;
+      }
+      
+      #gameOver {
+        max-width: 70vw;
+        padding: clamp(20px, 4vw, 35px);
+      }
+    }
+    
+    /* Стили для больших экранов */
+    @media (min-width: 1025px) {
+      #hud {
+        font-size: 18px;
+        padding: 12px 18px;
+      }
+      
+      #gameOver {
+        max-width: 400px;
+        padding: 30px;
+      }
+    }
+    
+    /* Поддержка iPhone с вырезом */
+    @supports (padding-top: env(safe-area-inset-top)) {
+      #hud {
+        padding-top: calc(env(safe-area-inset-top) + 8px);
+        padding-left: calc(env(safe-area-inset-left) + 10px);
+        padding-right: calc(env(safe-area-inset-right) + 10px);
+      }
     }
   </style>
 </head>
@@ -62,18 +199,76 @@
 <script>
 let score = 0;
 let gameOver = false;
-const MAX_BUBBLES = 50; // Максимальное количество пузырей
-const PUSH_FORCE = 0.3; // Сила толчка
-const FRICTION = 0.95; // Трение для затухания движения
-const MIN_VELOCITY = 0.1; // Минимальная скорость для остановки
+let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+let isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+let devicePixelRatio = window.devicePixelRatio || 1;
 
-const setScore = (val) => document.getElementById('hud').innerHTML = `Fusion Bubble Merge | Score: ${val} | Bubbles: ${bubbles.length}/${MAX_BUBBLES}`;
+// Адаптивные константы в зависимости от устройства
+const MAX_BUBBLES = isMobile ? 35 : 50; // Меньше пузырей на мобильных
+const PUSH_FORCE = isMobile ? 0.4 : 0.3; // Больше сила на мобильных для удобства
+const FRICTION = isMobile ? 0.93 : 0.95; // Немного больше трение на мобильных
+const MIN_VELOCITY = isMobile ? 0.15 : 0.1; // Чуть выше порог остановки на мобильных
+
+const setScore = (val) => {
+  const text = isMobile 
+    ? `Score: ${val}<br>Bubbles: ${bubbles.length}/${MAX_BUBBLES}`
+    : `Fusion Bubble Merge | Score: ${val} | Bubbles: ${bubbles.length}/${MAX_BUBBLES}`;
+  document.getElementById('hud').innerHTML = text;
+};
 
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
-let W = window.innerWidth, H = window.innerHeight;
-canvas.width = W;
-canvas.height = H;
+
+// Функция для получения реального размера экрана с учетом мобильных браузеров
+function getScreenDimensions() {
+  let W, H;
+  
+  if (isMobile) {
+    // Для мобильных устройств используем visual viewport если доступен
+    if (window.visualViewport) {
+      W = window.visualViewport.width;
+      H = window.visualViewport.height;
+    } else {
+      W = window.innerWidth;
+      H = window.innerHeight;
+      
+      // Корректировка для iOS Safari
+      if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+        H = window.screen.height;
+        if (window.orientation === 0 || window.orientation === 180) {
+          H = Math.min(window.screen.height, window.innerHeight);
+        }
+      }
+    }
+  } else {
+    W = window.innerWidth;
+    H = window.innerHeight;
+  }
+  
+  return { W, H };
+}
+
+let { W, H } = getScreenDimensions();
+
+// Настройка canvas с учетом высокого DPI
+function setupCanvas() {
+  const { W: newW, H: newH } = getScreenDimensions();
+  W = newW;
+  H = newH;
+  
+  // Устанавливаем CSS размеры
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  
+  // Устанавливаем внутренние размеры с учетом DPI
+  canvas.width = W * devicePixelRatio;
+  canvas.height = H * devicePixelRatio;
+  
+  // Масштабируем контекст
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+}
+
+setupCanvas();
 
 const colors = {
   2: '#eee', 4: '#add8e6', 8: '#87cefa', 16: '#4682b4', 32: '#f08080',
@@ -88,8 +283,18 @@ let pushDirection = { x: 0, y: 0 };
 let pushForce = 0;
 
 const getBaseRadiusBasedOnScreenSize = () => {
-  const baseRadius = Math.min(W, H) / 20;
-  return baseRadius;
+  // Адаптивный размер пузырей в зависимости от устройства
+  let divisor;
+  
+  if (isMobile) {
+    // На мобильных пузыри больше для удобства тапов
+    divisor = Math.min(W, H) < 400 ? 12 : 15; // Очень маленькие экраны получают ещё больше пузыри
+  } else {
+    divisor = 20; // Стандартный размер для десктопа
+  }
+  
+  const baseRadius = Math.min(W, H) / divisor;
+  return Math.max(baseRadius, 15); // Минимальный размер пузыря 15px
 };
 
 // Функция для расчета веса пузыря на основе его значения
@@ -117,14 +322,28 @@ function spawnBubble(x, y, value = 2) {
 function spawnInitialBubbles() {
   bubbles = [];
   const values = [];
-  const numBubbles = Math.floor(Math.random() * 10) + 8; // Меньше начальных пузырей
+  
+  // Адаптивное количество начальных пузырей
+  let numBubbles;
+  if (isMobile) {
+    // Меньше пузырей на мобильных для лучшей производительности
+    numBubbles = Math.floor(Math.random() * 6) + 5; 
+  } else {
+    numBubbles = Math.floor(Math.random() * 10) + 8;
+  }
+  
   for (let i = 0; i < numBubbles; i++) {
     let val = Math.random() < 0.6 ? 2 : (Math.random() < 0.7 ? 4 : 8);
     values.push(val);
   } 
+  
+  // Адаптивные отступы от краев
+  const marginX = isMobile ? 80 : 100;
+  const marginY = isMobile ? 100 : 100; // Больше отступ сверху на мобильных для HUD
+  
   for (let val of values) {
-    let x = Math.random() * (W - 200) + 100;
-    let y = Math.random() * (H - 200) + 100;
+    let x = Math.random() * (W - marginX * 2) + marginX;
+    let y = Math.random() * (H - marginY * 2) + marginY;
     spawnBubble(x, y, val);
   }
   setScore(score);
@@ -146,13 +365,23 @@ function drawBubble(b) {
   ctx.fillStyle = gradient;
   ctx.fill();
   
+  // Адаптивная толщина обводки
+  const strokeWidth = isMobile ? Math.max(1, b.radius * 0.05) : 2;
   ctx.strokeStyle = '#000';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = strokeWidth;
   ctx.stroke();
+  
+  // Адаптивный размер шрифта с лучшей читаемостью на мобильных
+  let fontSize;
+  if (isMobile) {
+    fontSize = Math.max(10, b.radius * 0.5); // Немного меньше на мобильных для лучшей читаемости
+  } else {
+    fontSize = Math.max(12, b.radius * 0.6);
+  }
   
   // Текст с лучшим контрастом
   ctx.fillStyle = '#000';
-  ctx.font = `bold ${Math.max(12, b.radius * 0.6)}px sans-serif`;
+  ctx.font = `bold ${fontSize}px ${isMobile ? '-apple-system, system-ui' : 'sans-serif'}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(b.value, b.x, b.y);
@@ -351,9 +580,23 @@ function draw() {
     ctx.fillRect(0, 0, W, H);
     
     ctx.fillStyle = '#ff0000';
-    ctx.font = 'bold 24px sans-serif';
+    
+    // Адаптивный размер шрифта для предупреждения
+    const warningFontSize = isMobile ? 
+      Math.min(Math.max(16, W * 0.04), 20) : 24;
+    
+    ctx.font = `bold ${warningFontSize}px ${isMobile ? '-apple-system, system-ui' : 'sans-serif'}`;
     ctx.textAlign = 'center';
-    ctx.fillText('ВНИМАНИЕ! Экран почти заполнен!', W/2, 50);
+    
+    // Адаптивная позиция предупреждения
+    const warningY = isMobile ? 80 : 50;
+    
+    if (isMobile) {
+      ctx.fillText('ВНИМАНИЕ!', W/2, warningY);
+      ctx.fillText('Экран почти заполнен!', W/2, warningY + warningFontSize + 5);
+    } else {
+      ctx.fillText('ВНИМАНИЕ! Экран почти заполнен!', W/2, warningY);
+    }
   }
 }
 
@@ -367,17 +610,27 @@ function loop() {
 
 function getPos(evt) {
   const rect = canvas.getBoundingClientRect();
-  if (evt.touches) {
-    return {
-      x: evt.touches[0].clientX - rect.left,
-      y: evt.touches[0].clientY - rect.top
-    };
+  let clientX, clientY;
+  
+  if (evt.touches && evt.touches.length > 0) {
+    clientX = evt.touches[0].clientX;
+    clientY = evt.touches[0].clientY;
+  } else if (evt.changedTouches && evt.changedTouches.length > 0) {
+    clientX = evt.changedTouches[0].clientX;
+    clientY = evt.changedTouches[0].clientY;
   } else {
-    return {
-      x: evt.clientX - rect.left,
-      y: evt.clientY - rect.top
-    };
+    clientX = evt.clientX;
+    clientY = evt.clientY;
   }
+  
+  // Учитываем масштабирование canvas
+  const scaleX = canvas.width / (rect.width * devicePixelRatio);
+  const scaleY = canvas.height / (rect.height * devicePixelRatio);
+  
+  return {
+    x: (clientX - rect.left) * scaleX / devicePixelRatio,
+    y: (clientY - rect.top) * scaleY / devicePixelRatio
+  };
 }
 
 function startDrag(e) {
@@ -410,12 +663,20 @@ function endDrag() {
     dragging.vx = pushDirection.x * forceMultiplier * pushForce;
     dragging.vy = pushDirection.y * forceMultiplier * pushForce;
     
-    // Добавляем новые пузыри реже и в меньшем количестве
-    if (Math.random() < 0.3 && bubbles.length < MAX_BUBBLES - 3) {
-      const quantity = Math.floor(Math.random() * 2) + 1;
+    // Адаптивное добавление новых пузырей
+    const spawnChance = isMobile ? 0.2 : 0.3; // Реже на мобильных
+    const maxNewBubbles = isMobile ? 1 : 2; // Меньше на мобильных
+    
+    if (Math.random() < spawnChance && bubbles.length < MAX_BUBBLES - 3) {
+      const quantity = Math.floor(Math.random() * maxNewBubbles) + 1;
+      
+      // Адаптивные отступы
+      const marginX = isMobile ? 80 : 100;
+      const marginY = isMobile ? 100 : 100;
+      
       for (let i = 0; i < quantity; i++) {
-        let x = Math.random() * (W - 200) + 100;
-        let y = Math.random() * (H - 200) + 100;
+        let x = Math.random() * (W - marginX * 2) + marginX;
+        let y = Math.random() * (H - marginY * 2) + marginY;
         spawnBubble(x, y, Math.random() < 0.7 ? 2 : 4);
       }
     }
@@ -427,20 +688,72 @@ function endDrag() {
   pushForce = 0;
 }
 
-canvas.addEventListener('mousedown', startDrag);
-canvas.addEventListener('mousemove', moveDrag);
-canvas.addEventListener('mouseup', endDrag);
+// Обработчики мыши для десктопа
+if (!isTouch) {
+  canvas.addEventListener('mousedown', startDrag);
+  canvas.addEventListener('mousemove', moveDrag);
+  canvas.addEventListener('mouseup', endDrag);
+  canvas.addEventListener('mouseleave', endDrag); // Завершаем тащение при выходе за пределы
+}
 
-canvas.addEventListener('touchstart', startDrag);
-canvas.addEventListener('touchmove', e => { moveDrag(e); e.preventDefault(); }, { passive: false });
-canvas.addEventListener('touchend', endDrag);
+// Обработчики касаний для мобильных
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault(); // Предотвращаем зум и прокрутку
+  startDrag(e);
+}, { passive: false });
 
-window.addEventListener('resize', () => {
-  W = window.innerWidth;
-  H = window.innerHeight;
-  canvas.width = W;
-  canvas.height = H;
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault(); // Предотвращаем прокрутку страницы
+  moveDrag(e);
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  endDrag();
+}, { passive: false });
+
+canvas.addEventListener('touchcancel', (e) => {
+  e.preventDefault();
+  endDrag();
+}, { passive: false });
+
+// Предотвращение контекстного меню на касаниях
+canvas.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
 });
+
+// Предотвращение double-tap zoom на iOS
+let lastTouchTime = 0;
+canvas.addEventListener('touchstart', (e) => {
+  const now = Date.now();
+  if (now - lastTouchTime < 300) {
+    e.preventDefault();
+  }
+  lastTouchTime = now;
+});
+
+// Обработчик изменения размера и ориентации
+function handleResize() {
+  setupCanvas();
+  
+  // Пересчитываем размеры пузырей при изменении экрана
+  const newBaseRadius = getBaseRadiusBasedOnScreenSize();
+  bubbles.forEach(bubble => {
+    const scaleFactor = newBaseRadius / (Math.min(W, H) / (isMobile ? 15 : 20));
+    bubble.radius = newBaseRadius + Math.log2(bubble.value) * (newBaseRadius / 3);
+  });
+}
+
+window.addEventListener('resize', handleResize);
+window.addEventListener('orientationchange', () => {
+  // Задержка для iOS Safari
+  setTimeout(handleResize, 100);
+});
+
+// Обработчик для визуального viewport (мобильные браузеры)
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', handleResize);
+}
 
 // Добавляем обработчик клавиши R для перезапуска
 window.addEventListener('keydown', (e) => {
