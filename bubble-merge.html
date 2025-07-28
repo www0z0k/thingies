@@ -338,6 +338,7 @@ function constrainBubblesToScreen() {
 function spawnInitialBubbles() {
   // Сохраняем существующий прогресс если есть
   if (bubbles.length > 0) {
+    console.log("Игра уже идет, не перезапускаем начальные пузыри");
     return; // Не перезапускаем если игра уже идет
   }
   
@@ -348,13 +349,16 @@ function spawnInitialBubbles() {
   let numBubbles;
   if (isMobile) {
     // Меньше пузырей на мобильных для лучшей производительности
-    numBubbles = Math.floor(Math.random() * 6) + 5; 
+    numBubbles = Math.floor(Math.random() * 4) + 3; // 3-6 пузырей на мобильных
   } else {
-    numBubbles = Math.floor(Math.random() * 10) + 8;
+    numBubbles = Math.floor(Math.random() * 6) + 4; // 4-9 пузырей на десктопе
   }
   
+  console.log(`Создаем ${numBubbles} начальных пузырей`);
+  
   for (let i = 0; i < numBubbles; i++) {
-    let val = Math.random() < 0.6 ? 2 : (Math.random() < 0.7 ? 4 : 8);
+    // Как в 2048: 90% на "2", 10% на "4"
+    let val = Math.random() < 0.9 ? 2 : 4;
     values.push(val);
   } 
   
@@ -366,6 +370,7 @@ function spawnInitialBubbles() {
     let x = Math.random() * (W - marginX * 2) + marginX;
     let y = Math.random() * (H - marginY * 2) + marginY;
     spawnBubble(x, y, val);
+    console.log(`Начальный пузырь ${val} создан в позиции (${Math.round(x)}, ${Math.round(y)})`);
   }
   setScore(score);
 }
@@ -493,6 +498,7 @@ function restartGame() {
   dragging = null;
   pushStart = null;
   document.getElementById('gameOver').style.display = 'none';
+  console.log("Перезапуск игры - спавним начальные пузыри");
   spawnInitialBubbles();
 }
 
@@ -855,43 +861,84 @@ function moveDrag(e) {
 }
 
 function endDrag() {
-  if (dragging && pushStart && pushForce > 0.3) { // Уменьшили минимальную силу
-    console.log(`Запуск пузыря ${dragging.value} с силой ${pushForce.toFixed(2)}`);
+  let actionPerformed = false; // Флаг, что действие было выполнено
+  
+  if (dragging && pushStart) {
+    actionPerformed = true; // Действие считается выполненным при любом натяжении
     
-    // Нормализуем направление
-    const directionLength = distance({ x: 0, y: 0 }, pushDirection);
-    if (directionLength > 0) {
-      const normalizedX = pushDirection.x / directionLength;
-      const normalizedY = pushDirection.y / directionLength;
+    if (pushForce > 0.3) { // Если достаточная сила - толкаем пузырь
+      console.log(`Запуск пузыря ${dragging.value} с силой ${pushForce.toFixed(2)}`);
       
-      // Применяем толчок с учетом веса пузыря - увеличили базовую силу
-      const baseForce = isMobile ? 15 : 12; // Больше базовая сила
-      const forceMultiplier = (baseForce * pushForce) / dragging.weight;
-      dragging.vx = normalizedX * forceMultiplier;
-      dragging.vy = normalizedY * forceMultiplier;
-      
-      console.log(`Установлена скорость: vx=${dragging.vx.toFixed(2)}, vy=${dragging.vy.toFixed(2)}`);
+      // Нормализуем направление
+      const directionLength = distance({ x: 0, y: 0 }, pushDirection);
+      if (directionLength > 0) {
+        const normalizedX = pushDirection.x / directionLength;
+        const normalizedY = pushDirection.y / directionLength;
+        
+        // Применяем толчок с учетом веса пузыря
+        const baseForce = isMobile ? 15 : 12;
+        const forceMultiplier = (baseForce * pushForce) / dragging.weight;
+        dragging.vx = normalizedX * forceMultiplier;
+        dragging.vy = normalizedY * forceMultiplier;
+        
+        console.log(`Установлена скорость: vx=${dragging.vx.toFixed(2)}, vy=${dragging.vy.toFixed(2)}`);
+      }
+    } else {
+      console.log("Слабое натяжение - пузырь не запущен, но действие засчитано");
     }
+  }
+  
+  // СПАВН ПУЗЫРЕЙ ПРИ ЛЮБОМ ДЕЙСТВИИ (как в 2048)
+  if (actionPerformed) {
+    console.log("Выполнено действие - спавним новые пузыри");
     
-    // Адаптивное добавление новых пузырей - реже
-    const spawnChance = isMobile ? 0.15 : 0.2; 
-    const maxNewBubbles = isMobile ? 1 : 1; // Меньше новых пузырей
+    // Проверяем, есть ли место для новых пузырей
+    const activeBubbles = bubbles.filter(b => !b.merged).length;
     
-    if (Math.random() < spawnChance && bubbles.length < MAX_BUBBLES - 5) {
-      const quantity = Math.floor(Math.random() * maxNewBubbles) + 1;
+    if (activeBubbles < MAX_BUBBLES - 2) { // Оставляем место для 1-2 новых пузырей
+      // Всегда спавним 1-2 пузыря после действия
+      const quantity = Math.random() < 0.7 ? 1 : 2; // 70% шанс на 1 пузырь, 30% на 2
       
       // Адаптивные отступы
       const marginX = isMobile ? 80 : 100;
       const marginY = isMobile ? 120 : 100;
       
-      for (let i = 0; i < quantity; i++) {
+      let spawned = 0;
+      let attempts = 0;
+      const maxAttempts = 50; // Максимум попыток найти место
+      
+      while (spawned < quantity && attempts < maxAttempts) {
         let x = Math.random() * (W - marginX * 2) + marginX;
         let y = Math.random() * (H - marginY * 2) + marginY;
-        spawnBubble(x, y, Math.random() < 0.8 ? 2 : 4); // Больше шансов на 2
+        
+        // Проверяем, не пересекается ли с существующими пузырями
+        let canSpawn = true;
+        const testRadius = getBaseRadiusBasedOnScreenSize() + 5; // Небольшой отступ
+        
+        for (let bubble of bubbles) {
+          if (!bubble.merged && distance({ x, y }, bubble) < bubble.radius + testRadius) {
+            canSpawn = false;
+            break;
+          }
+        }
+        
+        if (canSpawn) {
+          // 90% шанс на "2", 10% на "4" (как в 2048)
+          const value = Math.random() < 0.9 ? 2 : 4;
+          spawnBubble(x, y, value);
+          spawned++;
+          console.log(`Заспавнен пузырь ${value} в позиции (${Math.round(x)}, ${Math.round(y)})`);
+        }
+        
+        attempts++;
       }
+      
+      if (spawned === 0) {
+        console.log("Не удалось найти место для новых пузырей");
+      }
+    } else {
+      console.log("Недостаточно места для новых пузырей");
     }
-  } else if (dragging) {
-    console.log("Слишком слабое натяжение для запуска");
   }
   
   dragging = null;
@@ -987,10 +1034,21 @@ if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', handleResize);
 }
 
-// Добавляем обработчик клавиши R для перезапуска
+// Добавляем обработчик клавиши R для перезапуска и D для отладки
 window.addEventListener('keydown', (e) => {
   if (e.key === 'r' || e.key === 'R') {
     restartGame();
+  } else if (e.key === 'd' || e.key === 'D') {
+    // Отладочная информация
+    const activeBubbles = bubbles.filter(b => !b.merged);
+    console.log("=== ОТЛАДКА ИГРЫ ===");
+    console.log(`Всего пузырей: ${bubbles.length}`);
+    console.log(`Активных пузырей: ${activeBubbles.length}`);
+    console.log(`Лимит пузырей: ${MAX_BUBBLES}`);
+    console.log(`Счет: ${score}`);
+    console.log(`FPS: ${fpsCounter}`);
+    console.log("Активные пузыри:", activeBubbles.map(b => `${b.value}(${Math.round(b.x)},${Math.round(b.y)})`));
+    console.log("==================");
   }
 });
 
