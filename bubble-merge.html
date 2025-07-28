@@ -22,16 +22,53 @@
       z-index: 10;
       font-size: 18px;
     }
+    #gameOver {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.8);
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      display: none;
+      z-index: 20;
+    }
+    #gameOver button {
+      margin-top: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      background: #4682b4;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #gameOver button:hover {
+      background: #5a9bd4;
+    }
   </style>
 </head>
 <body>
 <canvas id="canvas"></canvas>
 <div id="hud">Fusion Bubble Merge</div>
+<div id="gameOver">
+  <h2>Игра окончена!</h2>
+  <p>Экран заполнен пузырями</p>
+  <p id="finalScore">Финальный счет: 0</p>
+  <button onclick="restartGame()">Начать заново</button>
+</div>
 
 <script>
 let score = 0;
-const setScore = (val) => document.getElementById('hud').innerHTML = `Fusion Bubble Merge | Score: ${val}`;
-setScore(0);
+let gameOver = false;
+const MAX_BUBBLES = 50; // Максимальное количество пузырей
+const PUSH_FORCE = 0.3; // Сила толчка
+const FRICTION = 0.95; // Трение для затухания движения
+const MIN_VELOCITY = 0.1; // Минимальная скорость для остановки
+
+const setScore = (val) => document.getElementById('hud').innerHTML = `Fusion Bubble Merge | Score: ${val} | Bubbles: ${bubbles.length}/${MAX_BUBBLES}`;
+
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 let W = window.innerWidth, H = window.innerHeight;
@@ -46,35 +83,51 @@ const colors = {
 
 let bubbles = [];
 let dragging = null;
-let offsetX = 0;
-let offsetY = 0;
+let pushStart = null;
+let pushDirection = { x: 0, y: 0 };
+let pushForce = 0;
 
 const getBaseRadiusBasedOnScreenSize = () => {
-  const baseRadius = Math.min(W, H) / 20; // Adjust this value to change bubble size
+  const baseRadius = Math.min(W, H) / 20;
   return baseRadius;
 };
+
+// Функция для расчета веса пузыря на основе его значения
+function getBubbleWeight(value) {
+  return Math.log2(value) * 0.5 + 1; // Больше значение = больше вес
+}
+
+// Функция для расчета массы пузыря (влияет на инерцию)
+function getBubbleMass(value) {
+  return Math.log2(value) * 0.3 + 0.5;
+}
 
 function spawnBubble(x, y, value = 2) {
   const br = getBaseRadiusBasedOnScreenSize();
   let radius = br + Math.log2(value) * (br / 3);
-  bubbles.push({ x, y, vx: 0, vy: 0, radius, value, merged: false });
+  const weight = getBubbleWeight(value);
+  const mass = getBubbleMass(value);
+  bubbles.push({ 
+    x, y, vx: 0, vy: 0, radius, value, 
+    weight, mass, merged: false, 
+    lastCollision: 0 // Для предотвращения мгновенных повторных слияний
+  });
 }
 
 function spawnInitialBubbles() {
   bubbles = [];
-  // const values = [2, 2, 2, 4, 4, 8];
-  // spawn ramdom bubbles with values 2, 4, 8
   const values = [];
-  const numBubbles = Math.floor(Math.random() * 15) + 15;
+  const numBubbles = Math.floor(Math.random() * 10) + 8; // Меньше начальных пузырей
   for (let i = 0; i < numBubbles; i++) {
-    let val = Math.random() < 0.5 ? 2 : (Math.random() < 0.5 ? 4 : 8);
+    let val = Math.random() < 0.6 ? 2 : (Math.random() < 0.7 ? 4 : 8);
     values.push(val);
   } 
   for (let val of values) {
-    let x = Math.random() * (W - 100) + 50;
-    let y = Math.random() * (H - 100) + 50;
+    let x = Math.random() * (W - 200) + 100;
+    let y = Math.random() * (H - 200) + 100;
     spawnBubble(x, y, val);
   }
+  setScore(score);
 }
 
 function drawBubble(b) {
@@ -82,10 +135,24 @@ function drawBubble(b) {
   ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
   ctx.fillStyle = colors[b.value] || '#fff';
   ctx.fill();
+  
+  // Добавляем градиент для объемности
+  const gradient = ctx.createRadialGradient(
+    b.x - b.radius/3, b.y - b.radius/3, 0,
+    b.x, b.y, b.radius
+  );
+  gradient.addColorStop(0, 'rgba(255,255,255,0.3)');
+  gradient.addColorStop(1, 'rgba(0,0,0,0.1)');
+  ctx.fillStyle = gradient;
+  ctx.fill();
+  
   ctx.strokeStyle = '#000';
+  ctx.lineWidth = 2;
   ctx.stroke();
+  
+  // Текст с лучшим контрастом
   ctx.fillStyle = '#000';
-  ctx.font = `${b.radius}px sans-serif`;
+  ctx.font = `bold ${Math.max(12, b.radius * 0.6)}px sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(b.value, b.x, b.y);
@@ -98,96 +165,204 @@ function distance(b1, b2) {
 }
 
 function mergeBubbles(b1, b2) {
+  const now = Date.now();
+  
+  // Предотвращаем слишком быстрые повторные слияния
+  if (now - b1.lastCollision < 100 || now - b2.lastCollision < 100) {
+    return false;
+  }
+  
   b1.value *= 2;
-  ++mergesPerMove;
-  score += b1.value * Math.max(1, mergesPerMove / 2);
+  score += b1.value * 10;
   setScore(score);
+  
   const br = getBaseRadiusBasedOnScreenSize();
   b1.radius = br + Math.log2(b1.value) * (br / 3);
-  b1.vx = (b1.vx + b2.vx) / 2;
-  b1.vy = (b1.vy + b2.vy) / 2;
+  b1.weight = getBubbleWeight(b1.value);
+  b1.mass = getBubbleMass(b1.value);
+  
+  // Сохраняем импульс с учетом массы
+  const totalMass = b1.mass + b2.mass;
+  b1.vx = (b1.vx * b1.mass + b2.vx * b2.mass) / totalMass;
+  b1.vy = (b1.vy * b1.mass + b2.vy * b2.mass) / totalMass;
+  
+  b1.lastCollision = now;
   b2.merged = true;
 
-  for (let i = 0; i < 6; i++) {
+  // Эффект слияния
+  for (let i = 0; i < 8; i++) {
     setTimeout(() => {
-      ctx.beginPath();
-      ctx.arc(b1.x, b1.y, b1.radius + i * 4, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(255,255,255,${1 - i / 6})`;
-      ctx.stroke();
-    }, i * 30);
+      if (!gameOver) {
+        ctx.beginPath();
+        ctx.arc(b1.x, b1.y, b1.radius + i * 3, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255,255,255,${1 - i / 8})`;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+    }, i * 40);
   }
+  
+  return true;
+}
+
+function checkGameOver() {
+  if (bubbles.length >= MAX_BUBBLES) {
+    gameOver = true;
+    document.getElementById('finalScore').textContent = `Финальный счет: ${score}`;
+    document.getElementById('gameOver').style.display = 'block';
+    return true;
+  }
+  return false;
+}
+
+function restartGame() {
+  gameOver = false;
+  score = 0;
+  bubbles = [];
+  dragging = null;
+  pushStart = null;
+  document.getElementById('gameOver').style.display = 'none';
+  spawnInitialBubbles();
 }
 
 function hasAvailableMerges() {
   for (let i = 0; i < bubbles.length; i++) {
     for (let j = i + 1; j < bubbles.length; j++) {
-      if (bubbles[i].value === bubbles[j].value) return true;
+      if (bubbles[i].value === bubbles[j].value && 
+          distance(bubbles[i], bubbles[j]) < bubbles[i].radius + bubbles[j].radius + 50) {
+        return true;
+      }
     }
   }
   return false;
 }
 
 function update() {
+  if (gameOver) return;
+  
+  const now = Date.now();
+  
   for (let b of bubbles) {
     if (b !== dragging) {
+      // Применяем трение для затухания движения
+      b.vx *= FRICTION;
+      b.vy *= FRICTION;
+      
+      // Останавливаем очень медленные движения
+      if (Math.abs(b.vx) < MIN_VELOCITY) b.vx = 0;
+      if (Math.abs(b.vy) < MIN_VELOCITY) b.vy = 0;
+      
       b.x += b.vx;
       b.y += b.vy;
-      b.vx *= 0.98;
-      b.vy *= 0.98;
 
+      // Отскок от границ с учетом веса
       if (b.x - b.radius < 0 || b.x + b.radius > W) {
-        b.vx *= -0.9;
+        b.vx *= -0.7; // Менее упругий отскок
         b.x = Math.max(b.radius, Math.min(W - b.radius, b.x));
       }
       if (b.y - b.radius < 0 || b.y + b.radius > H) {
-        b.vy *= -0.9;
+        b.vy *= -0.7;
         b.y = Math.max(b.radius, Math.min(H - b.radius, b.y));
       }
     }
   }
 
+  // Обработка столкновений и слияний
   for (let i = 0; i < bubbles.length; i++) {
     for (let j = i + 1; j < bubbles.length; j++) {
       let b1 = bubbles[i], b2 = bubbles[j];
       if (b1.merged || b2.merged) continue;
+      
       let d = distance(b1, b2);
-      if (d < b1.radius + b2.radius) {
-        if ((b1 === dragging || b2 === dragging) && b1.value === b2.value) {
-          mergeBubbles(b1 === dragging ? b1 : b2, b1 === dragging ? b2 : b1);
-        } else {
-          let angle = Math.atan2(b2.y - b1.y, b2.x - b1.x);
-          let overlap = b1.radius + b2.radius - d;
-          let pushX = Math.cos(angle) * overlap / 2;
-          let pushY = Math.sin(angle) * overlap / 2;
-          b1.x -= pushX; b1.y -= pushY;
-          b2.x += pushX; b2.y += pushY;
-          b1.vx -= pushX * 0.05; b1.vy -= pushY * 0.05;
-          b2.vx += pushX * 0.05; b2.vy += pushY * 0.05;
+      let minDistance = b1.radius + b2.radius;
+      
+      if (d < minDistance) {
+        // Проверяем возможность слияния
+        if (b1.value === b2.value) {
+          // Слияние происходит при контакте пузырей одинакового значения
+          mergeBubbles(b1, b2);
+          continue;
         }
+        
+        // Физика столкновения с учетом массы и веса
+        let angle = Math.atan2(b2.y - b1.y, b2.x - b1.x);
+        let overlap = minDistance - d;
+        
+        // Разделяем пузыри
+        let separationForce = overlap * 0.5;
+        let pushX = Math.cos(angle) * separationForce;
+        let pushY = Math.sin(angle) * separationForce;
+        
+        // Учитываем массу при разделении
+        let totalMass = b1.mass + b2.mass;
+        let b1Factor = b2.mass / totalMass;
+        let b2Factor = b1.mass / totalMass;
+        
+        b1.x -= pushX * b1Factor;
+        b1.y -= pushY * b1Factor;
+        b2.x += pushX * b2Factor;
+        b2.y += pushY * b2Factor;
+        
+        // Передача импульса с учетом массы и веса
+        let impactForce = 0.1 / Math.max(b1.weight, b2.weight);
+        b1.vx -= pushX * impactForce * b1Factor;
+        b1.vy -= pushY * impactForce * b1Factor;
+        b2.vx += pushX * impactForce * b2Factor;
+        b2.vy += pushY * impactForce * b2Factor;
       }
     }
   }
 
+  // Удаляем слившиеся пузыри
   bubbles = bubbles.filter(b => !b.merged);
-
-  if (!hasAvailableMerges()) {
-    for (let i = 0; i < 3; i++) {
-      let x = Math.random() * (W - 100) + 50;
-      let y = Math.random() * (H - 100) + 50;
-      spawnBubble(x, y, Math.random() < 0.5 ? 2 : 4);
-    }
-  }
+  
+  // Проверяем условие поражения
+  checkGameOver();
 }
 
 function draw() {
   ctx.clearRect(0, 0, W, H);
-  for (let b of bubbles) drawBubble(b);
+  
+  // Рисуем направление толчка
+  if (dragging && pushStart) {
+    ctx.beginPath();
+    ctx.moveTo(pushStart.x, pushStart.y);
+    ctx.lineTo(dragging.x, dragging.y);
+    ctx.strokeStyle = `rgba(255, 255, 255, 0.5)`;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    
+    // Показываем силу толчка
+    const force = Math.min(distance(pushStart, dragging) / 50, 5);
+    ctx.beginPath();
+    ctx.arc(pushStart.x, pushStart.y, 10 + force * 5, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255, 100, 100, ${0.3 + force * 0.1})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+  
+  for (let b of bubbles) {
+    drawBubble(b);
+  }
+  
+  // Предупреждение о близости к поражению
+  if (bubbles.length > MAX_BUBBLES * 0.8) {
+    ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+    ctx.fillRect(0, 0, W, H);
+    
+    ctx.fillStyle = '#ff0000';
+    ctx.font = 'bold 24px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('ВНИМАНИЕ! Экран почти заполнен!', W/2, 50);
+  }
 }
 
 function loop() {
   update();
   draw();
-  requestAnimationFrame(loop);
+  if (!gameOver) {
+    requestAnimationFrame(loop);
+  }
 }
 
 function getPos(evt) {
@@ -205,43 +380,51 @@ function getPos(evt) {
   }
 }
 
-let mergesPerMove = 0;
 function startDrag(e) {
+  if (gameOver) return;
+  
   const { x, y } = getPos(e);
   for (let b of bubbles) {
     if (distance({ x, y }, b) < b.radius) {
       dragging = b;
-      offsetX = x - b.x;
-      offsetY = y - b.y;
+      pushStart = { x: b.x, y: b.y };
       break;
     }
   }
 }
 
 function moveDrag(e) {
-  if (dragging) {
+  if (dragging && pushStart) {
     const { x, y } = getPos(e);
-    dragging.x = x - offsetX;
-    dragging.y = y - offsetY;
+    // Показываем направление толчка, но не двигаем пузырь
+    pushDirection.x = x - pushStart.x;
+    pushDirection.y = y - pushStart.y;
+    pushForce = Math.min(distance(pushStart, { x, y }) / 50, 5);
   }
 }
 
 function endDrag() {
-  if (dragging) {
-    dragging.vx = 0;
-    dragging.vy = 0;
-    mergesPerMove = 0;
-
-    if (Math.random() < 0.8) {
-      const quantity = Math.floor(Math.random() * 6) + 1;
+  if (dragging && pushStart) {
+    // Применяем толчок с учетом веса пузыря
+    const forceMultiplier = PUSH_FORCE / dragging.weight;
+    dragging.vx = pushDirection.x * forceMultiplier * pushForce;
+    dragging.vy = pushDirection.y * forceMultiplier * pushForce;
+    
+    // Добавляем новые пузыри реже и в меньшем количестве
+    if (Math.random() < 0.3 && bubbles.length < MAX_BUBBLES - 3) {
+      const quantity = Math.floor(Math.random() * 2) + 1;
       for (let i = 0; i < quantity; i++) {
-        let x = Math.random() * (W - 100) + 50;
-        let y = Math.random() * (H - 100) + 50;
-        spawnBubble(x, y, Math.random() < 0.5 ? 2 : 4);
+        let x = Math.random() * (W - 200) + 100;
+        let y = Math.random() * (H - 200) + 100;
+        spawnBubble(x, y, Math.random() < 0.7 ? 2 : 4);
       }
     }
   }
+  
   dragging = null;
+  pushStart = null;
+  pushDirection = { x: 0, y: 0 };
+  pushForce = 0;
 }
 
 canvas.addEventListener('mousedown', startDrag);
@@ -259,6 +442,14 @@ window.addEventListener('resize', () => {
   canvas.height = H;
 });
 
+// Добавляем обработчик клавиши R для перезапуска
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'r' || e.key === 'R') {
+    restartGame();
+  }
+});
+
+setScore(0);
 spawnInitialBubbles();
 loop();
 </script>
