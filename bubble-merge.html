@@ -312,6 +312,11 @@ function spawnBubble(x, y, value = 2) {
   let radius = br + Math.log2(value) * (br / 3);
   const weight = getBubbleWeight(value);
   const mass = getBubbleMass(value);
+  
+  // Убеждаемся, что пузырь спавнится в границах экрана
+  x = Math.max(radius, Math.min(W - radius, x));
+  y = Math.max(radius, Math.min(H - radius, y));
+  
   bubbles.push({ 
     x, y, vx: 0, vy: 0, radius, value, 
     weight, mass, merged: false, 
@@ -319,7 +324,20 @@ function spawnBubble(x, y, value = 2) {
   });
 }
 
+// Функция для принудительного удержания всех пузырей в границах
+function constrainBubblesToScreen() {
+  bubbles.forEach(bubble => {
+    bubble.x = Math.max(bubble.radius, Math.min(W - bubble.radius, bubble.x));
+    bubble.y = Math.max(bubble.radius, Math.min(H - bubble.radius, bubble.y));
+  });
+}
+
 function spawnInitialBubbles() {
+  // Сохраняем существующий прогресс если есть
+  if (bubbles.length > 0) {
+    return; // Не перезапускаем если игра уже идет
+  }
+  
   bubbles = [];
   const values = [];
   
@@ -339,7 +357,7 @@ function spawnInitialBubbles() {
   
   // Адаптивные отступы от краев
   const marginX = isMobile ? 80 : 100;
-  const marginY = isMobile ? 100 : 100; // Больше отступ сверху на мобильных для HUD
+  const marginY = isMobile ? 120 : 100; // Больше отступ сверху на мобильных для HUD
   
   for (let val of values) {
     let x = Math.random() * (W - marginX * 2) + marginX;
@@ -484,14 +502,22 @@ function update() {
       b.x += b.vx;
       b.y += b.vy;
 
-      // Отскок от границ с учетом веса
-      if (b.x - b.radius < 0 || b.x + b.radius > W) {
-        b.vx *= -0.7; // Менее упругий отскок
-        b.x = Math.max(b.radius, Math.min(W - b.radius, b.x));
+      // Строгие границы экрана - пузыри не могут выйти за пределы
+      if (b.x - b.radius <= 0) {
+        b.x = b.radius;
+        b.vx = Math.abs(b.vx) * 0.7; // Отскок в положительном направлении
       }
-      if (b.y - b.radius < 0 || b.y + b.radius > H) {
-        b.vy *= -0.7;
-        b.y = Math.max(b.radius, Math.min(H - b.radius, b.y));
+      if (b.x + b.radius >= W) {
+        b.x = W - b.radius;
+        b.vx = -Math.abs(b.vx) * 0.7; // Отскок в отрицательном направлении
+      }
+      if (b.y - b.radius <= 0) {
+        b.y = b.radius;
+        b.vy = Math.abs(b.vy) * 0.7; // Отскок вниз
+      }
+      if (b.y + b.radius >= H) {
+        b.y = H - b.radius;
+        b.vy = -Math.abs(b.vy) * 0.7; // Отскок вверх
       }
     }
   }
@@ -552,20 +578,38 @@ function update() {
 function draw() {
   ctx.clearRect(0, 0, W, H);
   
-  // Рисуем направление толчка
-  if (dragging && pushStart) {
+  // Рисуем направление толчка (рогатка)
+  if (dragging && pushStart && pushForce > 0) {
+    // Линия от пузыря к точке оттягивания
     ctx.beginPath();
-    ctx.moveTo(pushStart.x, pushStart.y);
-    ctx.lineTo(dragging.x, dragging.y);
-    ctx.strokeStyle = `rgba(255, 255, 255, 0.5)`;
+    ctx.moveTo(dragging.x, dragging.y);
+    ctx.lineTo(pushStart.x, pushStart.y);
+    ctx.strokeStyle = `rgba(255, 255, 255, 0.6)`;
     ctx.lineWidth = 3;
     ctx.stroke();
     
-    // Показываем силу толчка
-    const force = Math.min(distance(pushStart, dragging) / 50, 5);
+    // Стрелка показывающая направление полета
+    const arrowLength = pushForce * 20;
+    const arrowEndX = dragging.x + pushDirection.x * (arrowLength / distance({ x: 0, y: 0 }, pushDirection));
+    const arrowEndY = dragging.y + pushDirection.y * (arrowLength / distance({ x: 0, y: 0 }, pushDirection));
+    
     ctx.beginPath();
-    ctx.arc(pushStart.x, pushStart.y, 10 + force * 5, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(255, 100, 100, ${0.3 + force * 0.1})`;
+    ctx.moveTo(dragging.x, dragging.y);
+    ctx.lineTo(arrowEndX, arrowEndY);
+    ctx.strokeStyle = `rgba(255, 100, 100, ${0.5 + pushForce * 0.1})`;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    
+    // Точка оттягивания
+    ctx.beginPath();
+    ctx.arc(pushStart.x, pushStart.y, 8, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255, 100, 100, 0.7)`;
+    ctx.fill();
+    
+    // Индикатор силы на пузыре
+    ctx.beginPath();
+    ctx.arc(dragging.x, dragging.y, dragging.radius + 3 + pushForce * 2, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255, 200, 100, ${0.4 + pushForce * 0.1})`;
     ctx.lineWidth = 2;
     ctx.stroke();
   }
@@ -640,7 +684,7 @@ function startDrag(e) {
   for (let b of bubbles) {
     if (distance({ x, y }, b) < b.radius) {
       dragging = b;
-      pushStart = { x: b.x, y: b.y };
+      pushStart = { x, y }; // Запоминаем точку начала касания
       break;
     }
   }
@@ -649,19 +693,26 @@ function startDrag(e) {
 function moveDrag(e) {
   if (dragging && pushStart) {
     const { x, y } = getPos(e);
-    // Показываем направление толчка, но не двигаем пузырь
-    pushDirection.x = x - pushStart.x;
-    pushDirection.y = y - pushStart.y;
-    pushForce = Math.min(distance(pushStart, { x, y }) / 50, 5);
+    // Вектор от текущей позиции мыши к пузырю (обратное направление для рогатки)
+    pushDirection.x = pushStart.x - x;
+    pushDirection.y = pushStart.y - y;
+    pushForce = Math.min(distance(pushStart, { x, y }) / 30, 8); // Увеличили максимальную силу
   }
 }
 
 function endDrag() {
-  if (dragging && pushStart) {
-    // Применяем толчок с учетом веса пузыря
-    const forceMultiplier = PUSH_FORCE / dragging.weight;
-    dragging.vx = pushDirection.x * forceMultiplier * pushForce;
-    dragging.vy = pushDirection.y * forceMultiplier * pushForce;
+  if (dragging && pushStart && pushForce > 0.5) { // Минимальная сила для выстрела
+    // Нормализуем направление
+    const directionLength = distance({ x: 0, y: 0 }, pushDirection);
+    if (directionLength > 0) {
+      const normalizedX = pushDirection.x / directionLength;
+      const normalizedY = pushDirection.y / directionLength;
+      
+      // Применяем толчок с учетом веса пузыря
+      const forceMultiplier = (PUSH_FORCE * pushForce) / dragging.weight;
+      dragging.vx = normalizedX * forceMultiplier;
+      dragging.vy = normalizedY * forceMultiplier;
+    }
     
     // Адаптивное добавление новых пузырей
     const spawnChance = isMobile ? 0.2 : 0.3; // Реже на мобильных
@@ -672,7 +723,7 @@ function endDrag() {
       
       // Адаптивные отступы
       const marginX = isMobile ? 80 : 100;
-      const marginY = isMobile ? 100 : 100;
+      const marginY = isMobile ? 120 : 100;
       
       for (let i = 0; i < quantity; i++) {
         let x = Math.random() * (W - marginX * 2) + marginX;
@@ -734,14 +785,34 @@ canvas.addEventListener('touchstart', (e) => {
 
 // Обработчик изменения размера и ориентации
 function handleResize() {
+  const oldW = W, oldH = H;
   setupCanvas();
   
-  // Пересчитываем размеры пузырей при изменении экрана
-  const newBaseRadius = getBaseRadiusBasedOnScreenSize();
-  bubbles.forEach(bubble => {
-    const scaleFactor = newBaseRadius / (Math.min(W, H) / (isMobile ? 15 : 20));
-    bubble.radius = newBaseRadius + Math.log2(bubble.value) * (newBaseRadius / 3);
-  });
+  // Если размеры изменились, адаптируем позиции пузырей
+  if (bubbles.length > 0 && (oldW !== W || oldH !== H)) {
+    const scaleX = W / oldW;
+    const scaleY = H / oldH;
+    
+    bubbles.forEach(bubble => {
+      // Масштабируем позиции пузырей
+      bubble.x = Math.max(bubble.radius, Math.min(W - bubble.radius, bubble.x * scaleX));
+      bubble.y = Math.max(bubble.radius, Math.min(H - bubble.radius, bubble.y * scaleY));
+      
+      // Пересчитываем размеры пузырей
+      const newBaseRadius = getBaseRadiusBasedOnScreenSize();
+      bubble.radius = newBaseRadius + Math.log2(bubble.value) * (newBaseRadius / 3);
+      
+      // Обновляем физические параметры
+      bubble.weight = getBubbleWeight(bubble.value);
+      bubble.mass = getBubbleMass(bubble.value);
+    });
+     }
+   
+   // Принудительно удерживаем все пузыри в границах экрана
+   constrainBubblesToScreen();
+   
+   // Обновляем счет с текущими данными
+   setScore(score);
 }
 
 window.addEventListener('resize', handleResize);
