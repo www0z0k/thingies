@@ -210,9 +210,12 @@ const FRICTION = isMobile ? 0.93 : 0.95; // Немного больше трен
 const MIN_VELOCITY = isMobile ? 0.15 : 0.1; // Чуть выше порог остановки на мобильных
 
 const setScore = (val) => {
+  // Правильный подсчет пузырей - исключаем слившиеся
+  const activeBubbles = bubbles.filter(b => !b.merged).length;
+  
   const text = isMobile 
-    ? `Score: ${val}<br>Bubbles: ${bubbles.length}/${MAX_BUBBLES}<br>FPS: ${fpsCounter}`
-    : `Fusion Bubble Merge | Score: ${val} | Bubbles: ${bubbles.length}/${MAX_BUBBLES} | FPS: ${fpsCounter}`;
+    ? `Score: ${val}<br>Bubbles: ${activeBubbles}/${MAX_BUBBLES}<br>FPS: ${fpsCounter}`
+    : `Fusion Bubble Merge | Score: ${val} | Bubbles: ${activeBubbles}/${MAX_BUBBLES} | FPS: ${fpsCounter}`;
   document.getElementById('hud').innerHTML = text;
 };
 
@@ -470,10 +473,14 @@ function mergeBubbles(b1, b2) {
 }
 
 function checkGameOver() {
-  if (bubbles.length >= MAX_BUBBLES) {
+  // Правильный подсчет активных пузырей для проверки лимита
+  const activeBubbles = bubbles.filter(b => !b.merged).length;
+  
+  if (activeBubbles >= MAX_BUBBLES) {
     gameOver = true;
     document.getElementById('finalScore').textContent = `Финальный счет: ${score}`;
     document.getElementById('gameOver').style.display = 'block';
+    console.log(`Игра окончена! Активных пузырей: ${activeBubbles}/${MAX_BUBBLES}`);
     return true;
   }
   return false;
@@ -643,49 +650,80 @@ function draw() {
   if (dragging && pushStart && pushForce > 0) {
     ctx.save(); // Сохраняем состояние контекста
     
-    // Линия от пузыря к точке оттягивания
+    // Подсветка выбранного пузыря
     ctx.beginPath();
-    ctx.moveTo(dragging.x, dragging.y);
-    ctx.lineTo(pushStart.x, pushStart.y);
-    ctx.strokeStyle = `rgba(255, 255, 255, 0.6)`;
+    ctx.arc(dragging.x, dragging.y, dragging.radius + 5, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(0, 255, 255, 0.8)`;
     ctx.lineWidth = 3;
     ctx.stroke();
     
-    // Стрелка показывающая направление полета (оптимизированная)
+    // Получаем текущую позицию мыши для отображения натяжения
+    const currentMouseX = pushStart.x - pushDirection.x;
+    const currentMouseY = pushStart.y - pushDirection.y;
+    
+    // Линия натяжения от пузыря к мыши
+    ctx.beginPath();
+    ctx.moveTo(dragging.x, dragging.y);
+    ctx.lineTo(currentMouseX, currentMouseY);
+    ctx.strokeStyle = `rgba(255, 255, 255, 0.7)`;
+    ctx.lineWidth = Math.max(2, pushForce * 0.5);
+    ctx.stroke();
+    
+    // Стрелка показывающая направление полета
     const dirLength = Math.sqrt(pushDirection.x * pushDirection.x + pushDirection.y * pushDirection.y);
     if (dirLength > 0) {
-      const arrowLength = pushForce * 20;
+      const arrowLength = Math.min(pushForce * 15, 100); // Ограничиваем длину стрелки
       const normalizedX = pushDirection.x / dirLength;
       const normalizedY = pushDirection.y / dirLength;
       const arrowEndX = dragging.x + normalizedX * arrowLength;
       const arrowEndY = dragging.y + normalizedY * arrowLength;
       
+      // Основная стрелка
       ctx.beginPath();
       ctx.moveTo(dragging.x, dragging.y);
       ctx.lineTo(arrowEndX, arrowEndY);
-      ctx.strokeStyle = `rgba(255, 100, 100, ${0.5 + pushForce * 0.1})`;
-      ctx.lineWidth = 4;
+      ctx.strokeStyle = `rgba(255, 100, 100, ${0.7 + Math.min(pushForce * 0.1, 0.3)})`;
+      ctx.lineWidth = Math.max(3, pushForce * 0.8);
+      ctx.stroke();
+      
+      // Наконечник стрелки
+      const headLength = 15;
+      const headAngle = Math.PI / 6;
+      const angle = Math.atan2(normalizedY, normalizedX);
+      
+      ctx.beginPath();
+      ctx.moveTo(arrowEndX, arrowEndY);
+      ctx.lineTo(arrowEndX - headLength * Math.cos(angle - headAngle), arrowEndY - headLength * Math.sin(angle - headAngle));
+      ctx.moveTo(arrowEndX, arrowEndY);
+      ctx.lineTo(arrowEndX - headLength * Math.cos(angle + headAngle), arrowEndY - headLength * Math.sin(angle + headAngle));
+      ctx.strokeStyle = `rgba(255, 100, 100, 0.9)`;
+      ctx.lineWidth = 3;
       ctx.stroke();
     }
     
-    // Точка оттягивания
+    // Точка касания/мыши
     ctx.beginPath();
-    ctx.arc(pushStart.x, pushStart.y, 8, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(255, 100, 100, 0.7)`;
+    ctx.arc(currentMouseX, currentMouseY, 6 + pushForce, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255, 200, 100, 0.8)`;
     ctx.fill();
-    
-    // Индикатор силы на пузыре
-    ctx.beginPath();
-    ctx.arc(dragging.x, dragging.y, dragging.radius + 3 + pushForce * 2, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(255, 200, 100, ${0.4 + pushForce * 0.1})`;
+    ctx.strokeStyle = `rgba(255, 100, 100, 1)`;
     ctx.lineWidth = 2;
     ctx.stroke();
+    
+    // Индикатор силы - текст
+    if (!lowFPSMode) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.font = `bold ${isMobile ? '14' : '16'}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(`${Math.round(pushForce * 10)}%`, dragging.x, dragging.y - dragging.radius - 15);
+    }
     
     ctx.restore(); // Восстанавливаем состояние контекста
   }
   
-  // Предупреждение о близости к поражению
-  if (bubbles.length > MAX_BUBBLES * 0.8) {
+  // Предупреждение о близости к поражению - используем правильный подсчет
+  const activeBubbles = bubbles.filter(b => !b.merged).length;
+  if (activeBubbles > MAX_BUBBLES * 0.8) {
     ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
     ctx.fillRect(0, 0, W, H);
     
@@ -781,12 +819,23 @@ function startDrag(e) {
   if (gameOver) return;
   
   const { x, y } = getPos(e);
+  
+  // Находим самый близкий пузырь к точке касания
+  let closestBubble = null;
+  let closestDistance = Infinity;
+  
   for (let b of bubbles) {
-    if (distance({ x, y }, b) < b.radius) {
-      dragging = b;
-      pushStart = { x, y }; // Запоминаем точку начала касания
-      break;
+    const dist = distance({ x, y }, b);
+    if (dist < b.radius && dist < closestDistance) {
+      closestBubble = b;
+      closestDistance = dist;
     }
+  }
+  
+  if (closestBubble) {
+    dragging = closestBubble;
+    pushStart = { x: closestBubble.x, y: closestBubble.y }; // Центр выбранного пузыря
+    console.log(`Выбран пузырь со значением ${dragging.value} в позиции (${Math.round(dragging.x)}, ${Math.round(dragging.y)})`);
   }
 }
 
@@ -796,29 +845,39 @@ function moveDrag(e) {
     // Вектор от текущей позиции мыши к пузырю (обратное направление для рогатки)
     pushDirection.x = pushStart.x - x;
     pushDirection.y = pushStart.y - y;
-    pushForce = Math.min(distance(pushStart, { x, y }) / 30, 8); // Увеличили максимальную силу
+    
+    // Более отзывчивое натяжение - меньший делитель = более чувствительно
+    const stretchDistance = distance(pushStart, { x, y });
+    pushForce = Math.min(stretchDistance / 15, 10); // Увеличили чувствительность и максимальную силу
+    
+    console.log(`Натяжение: ${Math.round(stretchDistance)}px, Сила: ${pushForce.toFixed(2)}`);
   }
 }
 
 function endDrag() {
-  if (dragging && pushStart && pushForce > 0.5) { // Минимальная сила для выстрела
+  if (dragging && pushStart && pushForce > 0.3) { // Уменьшили минимальную силу
+    console.log(`Запуск пузыря ${dragging.value} с силой ${pushForce.toFixed(2)}`);
+    
     // Нормализуем направление
     const directionLength = distance({ x: 0, y: 0 }, pushDirection);
     if (directionLength > 0) {
       const normalizedX = pushDirection.x / directionLength;
       const normalizedY = pushDirection.y / directionLength;
       
-      // Применяем толчок с учетом веса пузыря
-      const forceMultiplier = (PUSH_FORCE * pushForce) / dragging.weight;
+      // Применяем толчок с учетом веса пузыря - увеличили базовую силу
+      const baseForce = isMobile ? 15 : 12; // Больше базовая сила
+      const forceMultiplier = (baseForce * pushForce) / dragging.weight;
       dragging.vx = normalizedX * forceMultiplier;
       dragging.vy = normalizedY * forceMultiplier;
+      
+      console.log(`Установлена скорость: vx=${dragging.vx.toFixed(2)}, vy=${dragging.vy.toFixed(2)}`);
     }
     
-    // Адаптивное добавление новых пузырей
-    const spawnChance = isMobile ? 0.2 : 0.3; // Реже на мобильных
-    const maxNewBubbles = isMobile ? 1 : 2; // Меньше на мобильных
+    // Адаптивное добавление новых пузырей - реже
+    const spawnChance = isMobile ? 0.15 : 0.2; 
+    const maxNewBubbles = isMobile ? 1 : 1; // Меньше новых пузырей
     
-    if (Math.random() < spawnChance && bubbles.length < MAX_BUBBLES - 3) {
+    if (Math.random() < spawnChance && bubbles.length < MAX_BUBBLES - 5) {
       const quantity = Math.floor(Math.random() * maxNewBubbles) + 1;
       
       // Адаптивные отступы
@@ -828,9 +887,11 @@ function endDrag() {
       for (let i = 0; i < quantity; i++) {
         let x = Math.random() * (W - marginX * 2) + marginX;
         let y = Math.random() * (H - marginY * 2) + marginY;
-        spawnBubble(x, y, Math.random() < 0.7 ? 2 : 4);
+        spawnBubble(x, y, Math.random() < 0.8 ? 2 : 4); // Больше шансов на 2
       }
     }
+  } else if (dragging) {
+    console.log("Слишком слабое натяжение для запуска");
   }
   
   dragging = null;
